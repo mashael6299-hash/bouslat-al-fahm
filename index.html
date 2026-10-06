@@ -470,18 +470,51 @@ function applyTeacherSubjectLock(){
   }else{sel.disabled=false;}
 }
 async function insertCloudQuestion(q){
-  if(!cloudReady)return false;
+  if(!cloudReady || !cloudProfile?.id) return false;
+  // The dashboard now opens immediately after login, so reference data may
+  // still be loading. Always make sure subjects/domains are ready before insert.
+  if(!cloudSubjects.length || !cloudDomains.length){
+    await loadCloudReferenceData();
+  }
   const subjectKey=q.subject;
   const subjectRow=subjectRowByKey(subjectKey);
-  const domainRow=cloudDomains.find(d=>String(d.name||d.title||d.key||'')===String(q.skill));
-  const payload={question_text:q.q,options:q.o,correct_index:q.a,difficulty:q.difficulty,created_by:cloudProfile.id,is_published:false};
-  if(subjectRow) payload.subject_id=subjectRow.id;
-  if(domainRow) payload.domain_id=domainRow.id;
-  if(q.trainingType) payload.training_type=q.trainingType;
+  const domainRow=cloudDomains.find(d=>String(d.name||d.title||d.key||'').trim()===String(q.skill||'').trim());
+  if(!subjectRow){
+    const msg='لم يتم العثور على مادة السؤال في قاعدة البيانات.';
+    console.warn('insert question:',msg,{subjectKey,cloudSubjects});
+    const box=document.getElementById('saveMsg'); if(box) box.innerHTML='<div class="notice" style="color:#b42318">❌ '+msg+' أعيدي فتح تبويب إنشاء السؤال بعد اكتمال التحميل.</div>';
+    return false;
+  }
+  if(!domainRow){
+    const msg='لم يتم العثور على مجال السؤال في قاعدة البيانات.';
+    console.warn('insert question:',msg,{skill:q.skill,cloudDomains});
+    const box=document.getElementById('saveMsg'); if(box) box.innerHTML='<div class="notice" style="color:#b42318">❌ '+msg+' تأكدي من اختيار المجال الصحيح.</div>';
+    return false;
+  }
+  const payload={
+    question_text:q.q,
+    options:q.o,
+    correct_index:q.a,
+    difficulty:q.difficulty || 'متوسط',
+    created_by:cloudProfile.id,
+    is_published:false,
+    subject_id:subjectRow.id,
+    domain_id:domainRow.id,
+    training_type:q.trainingType || 'independent'
+  };
   if(q.passage) payload.passage=q.passage;
   const {data,error}=await supabaseClient.from('questions').insert(payload).select('*').single();
-  if(error){console.warn('insert question:',error);return false}
-  q.id=data.id; q.created_by=cloudProfile.id; q.subject_id=data.subject_id||payload.subject_id||null; q.is_published=data.is_published??false; return true;
+  if(error){
+    console.warn('insert question:',error,payload);
+    const box=document.getElementById('saveMsg');
+    if(box) box.innerHTML='<div class="notice" style="color:#b42318">❌ تعذر حفظ السؤال: '+(error.message||'خطأ غير معروف')+'</div>';
+    return false;
+  }
+  q.id=data.id;
+  q.created_by=cloudProfile.id;
+  q.subject_id=data.subject_id||payload.subject_id;
+  q.is_published=data.is_published??false;
+  return true;
 }
 async function deleteCloudQuestion(id){
   if(!cloudReady)return false;
