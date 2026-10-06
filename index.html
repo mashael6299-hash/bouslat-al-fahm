@@ -431,31 +431,97 @@ async function loginTeacher(){
   const email=document.getElementById('teacherEmail').value.trim();
   const password=document.getElementById('teacherPassword').value;
   const msg=document.getElementById('teacherLoginMsg');
-  if(!email||!password){msg.innerHTML='<div class="notice">أدخلي البريد الإلكتروني وكلمة المرور.</div>';return}
+  if(!email||!password){
+    msg.innerHTML='<div class="notice">أدخلي البريد الإلكتروني وكلمة المرور.</div>';
+    return;
+  }
+  if(!navigator.onLine){
+    msg.innerHTML='<div class="notice" style="color:#b42318">لا يوجد اتصال بالإنترنت. تحققي من الاتصال ثم أعيدي المحاولة.</div>';
+    return;
+  }
   msg.innerHTML='<div class="notice">⏳ جارٍ التحقق من الحساب...</div>';
   try{
-    if(!navigator.onLine) throw new Error('لا يوجد اتصال بالإنترنت في الجهاز.');
-    try{await withTimeout(supabaseClient.auth.signOut(),5000);}catch(e){}
-    const {data,error}=await withTimeout(supabaseClient.auth.signInWithPassword({email,password}),12000);
-    if(error){msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+(error.message||'بيانات الدخول غير صحيحة.')+'</div>';return}
+    // لا نسجل الخروج قبل تسجيل الدخول؛ Supabase يستبدل جلسة الطالبة المجهولة
+    // بالجلسة البريدية للحساب عند نجاح signInWithPassword.
+    let authResult;
+    try{
+      authResult = await withTimeout(
+        supabaseClient.auth.signInWithPassword({email,password}),
+        15000
+      );
+    }catch(e){
+      if(e?.message==='TIMEOUT'){
+        msg.innerHTML='<div class="notice" style="color:#b42318">استغرق تسجيل الدخول وقتًا أطول من المتوقع. إذا كان الإنترنت يعمل، أعيدي المحاولة مرة أخرى.</div>';
+      }else{
+        msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الاتصال بخدمة الحسابات: '+(e?.message||'خطأ غير معروف')+'</div>';
+      }
+      return;
+    }
+
+    const {data,error}=authResult||{};
+    if(error){
+      msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+(error.message||'بيانات الدخول غير صحيحة.')+'</div>';
+      return;
+    }
     const user=data?.user;
-    if(!user){msg.innerHTML='<div class="notice" style="color:#b42318">لم تُرجع خدمة الحسابات بيانات المستخدم.</div>';return}
-    msg.innerHTML='<div class="notice">⏳ تم التحقق، جارٍ تحميل الصلاحيات...</div>';
-    const {data:profile,error:pe}=await withTimeout(supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',user.id).maybeSingle(),8000);
-    if(pe||!profile){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">تم تسجيل الدخول لكن لم يتم العثور على ملف الصلاحيات.</div>';return}
-    if(!['admin','teacher'].includes(profile.role)){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">هذا الحساب ليس حساب معلمة أو مشرفة.</div>';return}
-    cloudProfile=profile; cloudReady=true;
-    // افتحي اللوحة فور نجاح المصادقة؛ التحليلات الثقيلة تُحمّل في الخلفية ولا تعطل الدخول.
+    if(!user){
+      msg.innerHTML='<div class="notice" style="color:#b42318">لم تُرجع خدمة الحسابات بيانات المستخدم.</div>';
+      return;
+    }
+
+    msg.innerHTML='<div class="notice">⏳ تم الدخول، جارٍ قراءة صلاحيات الحساب...</div>';
+
+    let profileResult;
+    try{
+      profileResult = await withTimeout(
+        supabaseClient
+          .from('profiles')
+          .select('id,full_name,role,class_id,subject_id')
+          .eq('id',user.id)
+          .maybeSingle(),
+        8000
+      );
+    }catch(e){
+      msg.innerHTML='<div class="notice" style="color:#b42318">تم تسجيل الدخول، لكن تعذر قراءة صلاحيات الحساب من قاعدة البيانات. أعيدي المحاولة.</div>';
+      return;
+    }
+
+    const {data:profile,error:pe}=profileResult||{};
+    if(pe){
+      msg.innerHTML='<div class="notice" style="color:#b42318">تعذر قراءة صلاحيات الحساب: '+(pe.message||'خطأ في قاعدة البيانات.')+'</div>';
+      return;
+    }
+    if(!profile){
+      msg.innerHTML='<div class="notice" style="color:#b42318">تم تسجيل الدخول لكن لم يتم العثور على ملف الصلاحيات لهذا الحساب.</div>';
+      return;
+    }
+    if(!['admin','teacher'].includes(profile.role)){
+      msg.innerHTML='<div class="notice" style="color:#b42318">هذا الحساب ليس حساب معلمة أو مشرفة.</div>';
+      return;
+    }
+
+    cloudProfile=profile;
+    cloudReady=true;
+    studentAuthUser=null;
+    studentCloudProfile=null;
+
+    // افتحي اللوحة مباشرة بعد نجاح المصادقة.
     show('teacher');
-    msg.innerHTML='<div class="notice">✅ تم الدخول بنجاح.</div>';
-    Promise.allSettled([withTimeout(loadCloudReferenceData(),5000),withTimeout(loadCloudQuestions(),7000)])
-      .then(()=>renderTeacher().catch(e=>console.warn('dashboard refresh:',e)));
+    msg.innerHTML='<div class="notice">✅ تم تسجيل الدخول بنجاح.</div>';
+
+    // البيانات المرجعية والأسئلة تُحمّل في الخلفية.
+    Promise.allSettled([
+      withTimeout(loadCloudReferenceData(),5000),
+      withTimeout(loadCloudQuestions(),7000)
+    ]).then(()=>{
+      try{ renderTeacher(); }catch(e){ console.warn('dashboard refresh:',e); }
+    });
   }catch(e){
     console.error('teacher login:',e);
-    const message=e?.message==='TIMEOUT'?'استغرق الاتصال بخدمة الحسابات وقتًا أطول من المتوقع. تحققي من الاتصال ثم أعيدي المحاولة.':(e?.message||'تعذر الاتصال بخدمة تسجيل الدخول.');
-    msg.innerHTML='<div class="notice" style="color:#b42318">'+message+'</div>';
+    msg.innerHTML='<div class="notice" style="color:#b42318">تعذر تسجيل الدخول: '+(e?.message||'خطأ غير معروف')+'</div>';
   }
 }
+
 async function logoutTeacher(){
   await supabaseClient.auth.signOut(); cloudProfile=null; cloudReady=false; show('home');
 }
@@ -2276,6 +2342,92 @@ show=async function(id){
   if(id==='student' && studentAuthUser){
     await loadStudentCloudResults();
     try{renderStudent();}catch(e){}
+  }
+};
+</script>
+
+<script>
+// ===== FINAL STUDENT LOGIN PATCH v2 =====
+window.loginStudent = async function(){
+  const n=(document.getElementById('studentName')?.value||'').trim();
+  const c=(document.getElementById('studentClass')?.value||'').trim();
+  if(!n){alert('فضلاً اكتبي اسم الطالبة');return;}
+  if(!c){alert('فضلاً اختاري الصف');return;}
+  try{
+    await loadCloudClasses();
+    const classRow=(window.cloudClasses||[]).find(x=>String(x.name||x.title||x.class_name||'').trim()===c);
+    if(!classRow){alert('تعذر العثور على الفصل في قاعدة البيانات.');return;}
+
+    const gs=await withTimeout(supabaseClient.auth.getSession(),8000);
+    let session=gs?.data?.session||null;
+    let profile=null;
+
+    if(session?.user?.is_anonymous){
+      const pr=await withTimeout(
+        supabaseClient.from('profiles')
+          .select('id,full_name,role,class_id,subject_id')
+          .eq('id',session.user.id).maybeSingle(),8000
+      );
+      if(!pr.error && pr.data?.role==='student') profile=pr.data;
+      if(profile){
+        const same=String(profile.full_name||'').trim()===n && String(profile.class_id)===String(classRow.id);
+        if(!same){
+          try{await withTimeout(supabaseClient.auth.signOut(),8000);}catch(e){}
+          session=null; profile=null;
+        }
+      }
+    }
+
+    if(!profile){
+      if(session && !session.user?.is_anonymous){
+        try{await withTimeout(supabaseClient.auth.signOut(),8000);}catch(e){}
+      }
+      const si=await withTimeout(
+        supabaseClient.auth.signInAnonymously({options:{data:{full_name:n,role:'student',class_id:classRow.id}}}),10000
+      );
+      if(si.error) throw si.error;
+      session=si.data?.session||null;
+      if(!si.data?.user) throw new Error('لم يتم إنشاء جلسة الطالبة.');
+      const pr=await withTimeout(
+        supabaseClient.from('profiles')
+          .select('id,full_name,role,class_id,subject_id')
+          .eq('id',si.data.user.id).maybeSingle(),8000
+      );
+      if(pr.error) throw pr.error;
+      if(!pr.data || pr.data.role!=='student') throw new Error('تعذر إنشاء ملف الطالبة.');
+      profile=pr.data;
+    }
+
+    studentAuthUser=session.user;
+    studentCloudProfile=profile;
+    student={name:String(profile.full_name||n),class:c,id:session.user.id};
+    cloudProfile=null;
+    cloudReady=false;
+    localStorage.setItem('bf_student',JSON.stringify(student));
+
+    // فتح لوحة الطالبة مباشرة بدون انتظار أي استعلام نتائج.
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    const screen=document.getElementById('student');
+    if(!screen) throw new Error('تعذر فتح صفحة الطالبة.');
+    screen.classList.add('active');
+    try{renderStudent();}catch(e){console.warn('renderStudent:',e);}
+
+    // تحديث النتائج في الخلفية فقط.
+    loadStudentCloudResults().then(()=>{try{renderStudent();}catch(e){}}).catch(e=>console.warn('results refresh:',e));
+  }catch(e){
+    console.error('student login:',e);
+    alert(e?.message||'حدث خطأ أثناء دخول الطالبة.');
+  }
+};
+
+window.logoutStudent = async function(){
+  try{
+    currentTaskId=null; currentTaskSubjectId=null; currentQuiz=[]; currentIndex=0; currentScore=0;
+    window.currentAnswerRows=[]; window.quizDomainScores={};
+    student=null; studentCloudProfile=null; localStorage.removeItem('bf_student');
+  }finally{
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById('home')?.classList.add('active');
   }
 };
 </script>
