@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>بوصلة الفهم</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+:root{--primary:#7657c8;--secondary:#b98bdc;--light:#f5f0ff;--pink:#f6dff0;--text:#302b3d;--muted:#777083;--white:#fff;--green:#48a868;--orange:#f0a34a}
+*{box-sizing:border-box} body{margin:0;font-family:Cairo,Arial,sans-serif;background:#faf8fc;color:var(--text)}
+header{background:linear-gradient(135deg,#7657c8,#a77bd5);color:white;padding:22px 6%;display:flex;justify-content:space-between;align-items:center;box-shadow:0 5px 20px #7657c833}
+.logo{font-size:27px;font-weight:800}.tag{font-size:13px;opacity:.9}
+.container{max-width:1180px;margin:30px auto;padding:0 20px}
+.screen{display:none}.screen.active{display:block}
+.hero{text-align:center;padding:35px 10px}.compass{font-size:62px}.hero h1{font-size:40px;margin:8px 0;color:var(--primary)}.hero p{color:var(--muted);font-size:18px}
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;max-width:720px;margin:35px auto}
+.card{background:white;border-radius:24px;padding:30px;text-align:center;box-shadow:0 8px 30px #3d285b12;border:1px solid #eee}
+.card .icon{font-size:48px}.card h2{margin:10px 0}.card p{color:var(--muted)}
+button{border:0;border-radius:14px;padding:13px 24px;font-family:inherit;font-weight:700;cursor:pointer;background:var(--primary);color:white;font-size:15px}
+button.secondary{background:#eee8f8;color:var(--primary)}button.green{background:var(--green)}button.orange{background:var(--orange)}
+.input{width:100%;padding:14px;border:1px solid #ddd4e9;border-radius:13px;font-family:inherit;margin:8px 0 16px;font-size:15px}
+.login{max-width:470px;margin:45px auto;background:white;padding:35px;border-radius:24px;box-shadow:0 8px 30px #3d285b12}.login h2{text-align:center;color:var(--primary)}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}.welcome h2{margin:0}.welcome p{color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin:20px 0}.stat{background:white;padding:18px;border-radius:18px;text-align:center;box-shadow:0 4px 18px #3d285b0d}.stat b{font-size:25px;color:var(--primary);display:block}
+.subjects{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.subject{background:white;padding:25px;border-radius:22px;box-shadow:0 5px 20px #3d285b10;border-top:5px solid var(--primary)}.subject.science{border-color:#5fae83}.subject.math{border-color:#e49b59}.subject h3{font-size:21px}
+.progress{height:9px;background:#eee;border-radius:10px;overflow:hidden;margin:12px 0}.progress span{display:block;height:100%;background:var(--primary);border-radius:10px}
+.panel{background:white;border-radius:22px;padding:25px;box-shadow:0 5px 20px #3d285b10;margin:20px 0}.panel h3{color:var(--primary)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}.tabs button{background:#eee8f8;color:var(--primary)}.tabs button.active{background:var(--primary);color:white}
+.question{max-width:760px;margin:20px auto}.question .qtext{font-size:20px;font-weight:700;margin:20px 0}.option{display:block;width:100%;text-align:right;background:#f8f6fb;color:var(--text);margin:10px 0;border:1px solid #e5deee}.option:hover{background:#eee7fa}.option.correct{background:#dff4e5;border-color:#7bc88f}.option.wrong{background:#ffe5e5;border-color:#e99}
+.badge{display:inline-block;background:var(--pink);color:#8b4f82;padding:8px 13px;border-radius:30px;margin:5px;font-size:13px}
+table{width:100%;border-collapse:collapse}th,td{padding:13px;border-bottom:1px solid #eee;text-align:right}th{color:var(--primary)}
+.empty{text-align:center;color:var(--muted);padding:30px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.full{grid-column:1/-1}
+.footer{text-align:center;color:#999;padding:35px}
+.notice{padding:14px;border-radius:14px;background:#f5f0ff;color:#5d479c;margin:15px 0}
+@media(max-width:750px){.cards,.subjects,.stats{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.hero h1{font-size:30px}}
+
+.chart-wrap{background:#fff;border:1px solid #eee;border-radius:18px;padding:18px;margin:18px 0}
+.chart-bars{display:flex;align-items:flex-end;gap:18px;height:230px;padding:25px 10px 5px;border-bottom:1px solid #ddd}
+.chart-col{flex:1;text-align:center;min-width:70px}
+.chart-bar{margin:auto;width:55px;background:linear-gradient(180deg,#7657c8,#b98bdc);border-radius:12px 12px 4px 4px;min-height:4px;position:relative}
+.chart-bar span{position:absolute;top:-27px;left:0;right:0;font-weight:700;color:#5d479c}
+.chart-label{font-size:13px;margin-top:8px}
+@media print{.no-print,header,.tabs,.footer{display:none!important}.panel{box-shadow:none!important;border:0!important}.container{max-width:none;margin:0}.chart-wrap{break-inside:avoid}}
+.trash-question{position:absolute;left:18px;top:18px;width:46px;height:46px;padding:0;border-radius:12px;background:#fff0f0;color:#d9534f;border:1px solid #f0caca;font-size:23px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.2s;box-shadow:0 2px 8px #0000000d}.trash-question:hover{background:#ffe1e1;transform:scale(1.06)}.trash-question:active{transform:scale(.95)}
+</style>
+<style>
+.reading-builder{border:2px solid #e8def5;border-radius:20px;padding:20px;background:#fcfaff;margin:20px 0}
+.passage-box{width:100%;min-height:230px;max-height:360px;resize:vertical;overflow-y:auto;border:1px solid #ddd3ea;border-radius:15px;padding:16px;font-family:inherit;line-height:2;background:white}
+.question-builder{border:1px solid #eee2f5;border-radius:16px;padding:18px;margin:15px 0;background:#fff}
+.question-builder h4{margin-top:0;color:#7657c8}
+.reading-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch}
+.reading-passage{background:white;border:1px solid #e2d8ed;border-radius:18px;padding:22px;max-height:520px;overflow-y:auto;line-height:2.1;white-space:pre-wrap}
+.reading-questions{background:white;border:1px solid #e2d8ed;border-radius:18px;padding:22px;max-height:520px;overflow-y:auto}
+.question-card{border-bottom:1px solid #eee;padding-bottom:20px;margin-bottom:20px}
+.question-number{display:inline-block;background:#f0e7fb;color:#7657c8;border-radius:20px;padding:5px 12px;font-size:13px;margin-bottom:10px}
+@media(max-width:800px){.reading-layout{grid-template-columns:1fr}.reading-passage,.reading-questions{max-height:430px}}
+</style></head>
+<body>
+<header><div><div class="logo">🧭 بوصلة الفهم</div><div class="tag">رحلة رقمية توجه الطالبة نحو الفهم</div></div><button class="secondary" onclick="show('home')">الرئيسية</button></header>
+
+<div class="container">
+<section id="home" class="screen active">
+<div class="hero"><div class="compass">🧭</div><h1>بوصلة الفهم</h1><p>تدريبات تفاعلية في القراءة والعلوم والرياضيات، مع متابعة رحلة كل طالبة.</p></div>
+<div class="cards">
+<div class="card"><div class="icon">👩‍🎓</div><h2>دخول الطالبة</h2><p>ابدئي تدريباتك واحفظي تقدمك ونتائجك.</p><button onclick="show('studentLogin')">ابدئي الرحلة</button></div>
+<div class="card"><div class="icon">👩‍🏫</div><h2>أنا معلمة</h2><p>صممي الأسئلة وتابعي أداء الطالبات.</p><button onclick="openTeacherLogin()">لوحة المعلمة</button></div>
+</div></section>
+
+<section id="studentLogin" class="screen">
+<div class="login"><h2>👩‍🎓 تسجيل الطالبة</h2><p>أدخلي اسمك لنحفظ تقدمك في الرحلة.</p>
+<input id="studentName" class="input" placeholder="اسم الطالبة">
+<select id="studentClass" class="input">
+<option value="">اختاري الصف</option>
+<option value="ثالث أول">ثالث أول</option>
+<option value="ثالث ثاني">ثالث ثاني</option>
+<option value="ثالث ثالث">ثالث ثالث</option>
+</select>
+<button onclick="loginStudent()" style="width:100%">دخول إلى الرحلة 🧭</button>
+</div></section>
+
+<section id="student" class="screen">
+<div class="topbar"><div class="welcome"><h2>مرحبًا، <span id="displayName"></span> 🌷</h2><p>واصلي رحلتك، كل تدريب يقربك من وجهتك.</p></div><button class="secondary" onclick="logoutStudent()">خروج</button></div>
+<div class="stats">
+<div class="stat">متوسط الأداء<b id="avg">0%</b></div><div class="stat">التدريبات المكتملة<b id="done">0</b></div><div class="stat">النقاط<b id="points">0</b></div><div class="stat">الشارات<b id="badges">0</b></div>
+</div>
+<div class="subjects">
+<div class="subject"><div style="font-size:42px">📖</div><h3>القراءة</h3><p>الفكرة الرئيسة والاستنتاج والمفردات.</p><div class="progress"><span id="readingProg" style="width:0%"></span></div><button onclick="startQuiz('reading')">ابدئي التدريب</button></div>
+<div class="subject science"><div style="font-size:42px">🔬</div><h3>العلوم</h3><p>مفاهيم علمية ومواقف وتفكير علمي.</p><div class="progress"><span id="scienceProg" style="width:0%"></span></div><button onclick="startQuiz('science')">ابدئي التدريب</button></div>
+<div class="subject math"><div style="font-size:42px">➗</div><h3>الرياضيات</h3><p>تدريبات حسابية ومسائل وتطبيقات.</p><div class="progress"><span id="mathProg" style="width:0%"></span></div><button onclick="startQuiz('math')">ابدئي التدريب</button></div>
+</div>
+<div class="panel">
+<h3>📅 مهمة هذا الأسبوع</h3>
+<div id="studentWeeklyTask"><div class="empty">لا توجد مهمة منشورة لهذا الأسبوع حاليًا.</div></div>
+</div>
+<div class="panel"><h3>🏆 إنجازاتي</h3><div id="studentBadges"></div></div>
+</section>
+
+<section id="quiz" class="screen">
+<div class="panel question"><button class="secondary" onclick="show('student')">← العودة</button><h2 id="quizTitle"></h2><div class="notice" id="quizHint"></div><div id="questionArea"></div></div>
+</section>
+
+<section id="teacherLogin" class="screen">
+<div class="login"><h2>🔐 دخول المعلمة / المشرفة</h2><p>الدخول الآن مرتبط بحسابات Supabase الفعلية.</p>
+<input id="teacherEmail" type="email" class="input" placeholder="البريد الإلكتروني">
+<input id="teacherPassword" type="password" class="input" placeholder="كلمة المرور">
+<button onclick="loginTeacher()" style="width:100%">دخول</button>
+<div id="teacherLoginMsg" style="margin-top:12px"></div>
+<button class="secondary" onclick="show('home')" style="width:100%;margin-top:10px">العودة للرئيسية</button>
+</div></section>
+
+<section id="teacher" class="screen">
+<div class="topbar"><div><h2>👩‍🏫 لوحة المعلمة</h2><p style="color:#777">إدارة التدريبات وتحليل رحلة الطالبات.</p></div><button class="secondary" onclick="show('home')">خروج</button></div>
+<div class="stats"><div class="stat">الطالبات<b id="tStudents">0</b></div><div class="stat">الأسئلة<b id="tQuestions">0</b></div><div class="stat">التدريبات المنجزة<b id="tAttempts">0</b></div><div class="stat">متوسط الأداء<b id="tAverage">0%</b></div></div>
+<div class="tabs"><button class="active" onclick="teacherTab('dashboard',this)">النتائج</button><button onclick="teacherTab('create',this)">إنشاء سؤال</button><button onclick="teacherTab('bank',this)">بنك الأسئلة</button><button onclick="teacherTab('weekly',this)">رحلات الفهم</button><button onclick="teacherTab('support',this)">خطة الدعم</button><button onclick="teacherTab('reports',this)">التقارير</button></div>
+<div id="dashboard" class="teacherTab panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>📊 نتائج الطالبات</h3><button class="green no-print" onclick="printResults()">🖨️ طباعة النتائج</button></div>
+<div style="display:flex;gap:15px;flex-wrap:wrap;margin-bottom:18px">
+<div style="max-width:300px;flex:1;min-width:220px">
+<label><b>تصفية حسب الصف</b></label>
+<select id="classFilter" class="input" onchange="renderResultsTable()">
+<option value="all">جميع الصفوف</option>
+<option value="ثالث أول">ثالث أول</option>
+<option value="ثالث ثاني">ثالث ثاني</option>
+<option value="ثالث ثالث">ثالث ثالث</option>
+</select>
+</div>
+<div style="max-width:300px;flex:1;min-width:220px">
+<label><b>تصفية حسب المادة</b></label>
+<select id="subjectFilter" class="input" onchange="renderResultsTable()">
+<option value="all">جميع المواد</option>
+<option value="reading">القراءة</option>
+<option value="science">العلوم</option>
+<option value="math">الرياضيات</option>
+</select>
+</div>
+</div>
+<div id="dashboardInsights" class="panel" style="margin-top:20px;border:1px solid #e8def5;background:#fcfaff"></div>
+<table><thead><tr><th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th></tr></thead><tbody id="resultsTable"></tbody></table><div id="smartAnalysisPanel" style="margin-top:25px"><div class="panel" style="border:1px solid #eadff5;box-shadow:none"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h3>🧠 التحليل الذكي حسب المجالات</h3><button class="green no-print" onclick="printDashboardAnalysis()">🖨️ طباعة التحليل</button></div><div id="smartAnalysisContent"><div class="empty">سيظهر التحليل بعد توفر نتائج الطالبات.</div></div></div></div></div>
+<div id="create" class="teacherTab panel" style="display:none">
+<h3>✏️ إنشاء تدريب جديد</h3>
+
+<div class="form-grid">
+<div>
+<label>المادة</label>
+<select id="newSubject" class="input" onchange="toggleQuestionBuilder()">
+<option value="reading">القراءة</option>
+<option value="science">العلوم</option>
+<option value="math">الرياضيات</option>
+</select>
+</div>
+<div id="trainingTypeWrap">
+<label>نوع التدريب</label>
+<select id="trainingType" class="input" onchange="toggleQuestionBuilder()">
+<option value="passage">📖 قطعة وأسئلة</option>
+<option value="independent">📝 أسئلة مستقلة</option>
+
+</select>
+</div>
+<div>
+<label>المجال</label>
+<select id="newSkill" class="input"></select>
+</div>
+<div>
+<label>مستوى الصعوبة</label>
+<select id="newDifficulty" class="input">
+<option value="سهل">سهل</option><option value="متوسط" selected>متوسط</option><option value="متقدم">متقدم</option>
+</select>
+</div>
+</div>
+
+<div id="readingCreator" class="reading-builder">
+<h3>📖 قطعة القراءة</h3>
+<p style="color:#777">ضعي القطعة هنا، وستبقى ثابتة أمام الطالبة أثناء انتقالها بين الأسئلة.</p>
+<textarea id="passageText" class="passage-box" placeholder="الصقي أو اكتبي قطعة القراءة هنا..."></textarea>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
+<h3>📝 أسئلة القطعة</h3>
+<button type="button" onclick="addReadingQuestion()">+ إضافة سؤال</button>
+</div>
+<div id="readingQuestionsBuilder"></div>
+<button class="green" onclick="saveReadingTraining()">💾 حفظ تدريب القراءة</button>
+<div id="readingSaveMsg"></div>
+</div>
+
+<div id="standardCreator" style="display:none">
+<div class="form-grid">
+<div class="full"><label>السؤال</label><textarea id="newQuestion" class="input" rows="3" placeholder="اكتبي السؤال هنا"></textarea></div>
+<div><input id="o1" class="input" placeholder="الخيار الأول"></div>
+<div><input id="o2" class="input" placeholder="الخيار الثاني"></div>
+<div><input id="o3" class="input" placeholder="الخيار الثالث"></div>
+<div><input id="o4" class="input" placeholder="الخيار الرابع"></div>
+<div><label>الإجابة الصحيحة</label><select id="correct" class="input"><option value="0">الأول</option><option value="1">الثاني</option><option value="2">الثالث</option><option value="3">الرابع</option></select></div>
+</div>
+<button class="green" onclick="addQuestion()">💾 حفظ السؤال</button>
+<div id="saveMsg"></div>
+</div>
+</div>
+<div id="bank" class="teacherTab panel" style="display:none"><h3>📚 بنك الأسئلة</h3><div id="bankList"></div></div><div id="weekly" class="teacherTab panel" style="display:none">
+<h3>📚 الأسئلة المنشورة</h3>
+<div class="notice">اختاري المادة والأسئلة التي تريدين نشرها، ثم انشريها أو أوقفي نشرها في أي وقت.</div>
+<div style="display:flex;gap:15px;flex-wrap:wrap">
+<div style="flex:1;min-width:220px"><label><b>المادة</b></label>
+<select id="weeklySubject" class="input" onchange="renderWeeklyBank()">
+<option value="all">جميع المواد</option><option value="reading">القراءة</option><option value="science">العلوم</option><option value="math">الرياضيات</option>
+</select></div>
+</div>
+<h4>اختاري سؤالًا واحدًا أو أكثر</h4>
+<div id="weeklyQuestionBank"></div>
+<button class="green" onclick="publishWeeklyTask()">🟢 نشر للطالبات</button>
+<div id="weeklyMsg"></div>
+<h4 style="margin-top:30px">📌 الأسئلة المنشورة</h4>
+<div id="publishedTasks"></div>
+</div>
+<div id="support" class="teacherTab panel" style="display:none">
+<h3>🩺 خطة الدعم العلاجي</h3>
+<div class="notice">تعرض هذه الصفحة الطالبات اللاتي حصلن على أقل من 60% في أحد المجالات، مع مجال الاحتياج والإجراء المقترح.</div>
+<div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap" class="no-print"><button class="green" onclick="printSupportPlan()">🖨️ طباعة خطة الدعم</button><button class="secondary" onclick="renderRemeasurement()">📈 إعادة القياس</button></div>
+<div id="supportPlanOutput"></div>
+<div id="remeasurementOutput" style="margin-top:22px"></div>
+</div>
+<div id="reports" class="teacherTab panel" style="display:none">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+<h3>📄 التقارير والرسوم البيانية</h3>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="green no-print" onclick="printCurrentReport()">🖨️ طباعة التقرير</button><button class="secondary no-print" onclick="printOfficialReport()">📄 تقرير رسمي</button></div>
+</div>
+<div class="tabs no-print">
+<button class="active" onclick="reportMode='class';renderReports();this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));this.classList.add('active')">تقرير الفصل</button>
+<button onclick="reportMode='student';renderReports();this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));this.classList.add('active')">تقرير طالبة</button>
+</div>
+<div id="classReportControls" class="no-print" style="display:flex;gap:15px;flex-wrap:wrap">
+<div style="min-width:220px"><label><b>الفصل</b></label><select id="reportClass" class="input" onchange="renderReports()"><option value="all">جميع الفصول</option><option value="ثالث أول">ثالث أول</option><option value="ثالث ثاني">ثالث ثاني</option><option value="ثالث ثالث">ثالث ثالث</option></select></div>
+<div style="min-width:220px"><label><b>المادة</b></label><select id="reportSubject" class="input" onchange="renderReports()"><option value="all">جميع المواد</option><option value="reading">القراءة</option><option value="science">العلوم</option><option value="math">الرياضيات</option></select></div>
+</div>
+<div id="studentReportControls" class="no-print" style="display:none;max-width:350px"><label><b>الطالبة</b></label><select id="reportStudent" class="input" onchange="renderReports()"></select></div>
+<div id="reportOutput"></div>
+</div></section>
+</div>
+<div class="footer">بوصلة الفهم © 2026 — نموذج تجريبي تعليمي</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://xyyochmzxnqejmrbbuyx.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_x0dFiQoS05cASvsKJLAI8g_5UL0QDi8';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+let cloudProfile = null;
+let cloudReady = false;
+let studentAuthUser = null;
+let studentCloudProfile = null;
+let cloudSubjects = [];
+let cloudDomains = [];
+async function loadCloudReferenceData(){
+  try{
+    const [sr,dr]=await Promise.all([
+      supabaseClient.from('subjects').select('*'),
+      supabaseClient.from('domains').select('*')
+    ]);
+    cloudSubjects=Array.isArray(sr.data)?sr.data:[];
+    cloudDomains=Array.isArray(dr.data)?dr.data:[];
+  }catch(e){console.warn('reference data:',e)}
+}
+function subjectKeyFromRow(x){
+  const v=String(x?.key||x?.code||x?.slug||x?.name||'').toLowerCase();
+  if(v.includes('قراءة')||v.includes('read')) return 'reading';
+  if(v.includes('علوم')||v.includes('sci')) return 'science';
+  if(v.includes('رياض')||v.includes('math')) return 'math';
+  return v;
+}
+function subjectRowByKey(key){return cloudSubjects.find(x=>subjectKeyFromRow(x)===key)||null}
+function domainNameById(id){
+  const x=cloudDomains.find(d=>String(d.id)===String(id));
+  return x?.name||x?.title||x?.key||'';
+}
+async function loadCloudSession(){
+  try{
+    await loadCloudReferenceData();
+    await loadCloudClasses();
+    const {data:{session}} = await supabaseClient.auth.getSession();
+    if(session){
+      if(session.user?.is_anonymous){ await loadStudentSession(); return; }
+      const {data:profile} = await supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',session.user.id).maybeSingle();
+      cloudProfile = profile || null;
+      cloudReady = !!profile;
+      if(cloudReady) await loadCloudQuestions();
+    }
+  }catch(e){ console.warn('Supabase session:',e); }
+}
+
+
+const defaultQuestions=[
+{id:1,subject:'reading',skill:'الفكرة الرئيسة',q:'ما الفكرة الرئيسة الأنسب للنص؟ «تساعد القراءة اليومية على توسيع المعرفة وتنمية القدرة على فهم الأفكار وتحليلها.»',o:['أهمية النوم','فوائد القراءة','فوائد الرياضة','تنظيم الوقت'],a:1},
+{id:2,subject:'reading',skill:'الاستنتاج',q:'إذا كان النص يذكر أن الطالبة استعانت بمصادر متعددة قبل كتابة بحثها، فما الذي يمكن استنتاجه؟',o:['أنها لم تقرأ','أنها اعتمدت على مصدر واحد','أنها تحققت من المعلومات','أنها لم تكمل البحث'],a:2},
+{id:3,subject:'science',skill:'التفكير العلمي',q:'أي مما يلي يمثل ملاحظة علمية؟',o:['الماء جميل','درجة حرارة الماء 25°م','أعتقد أن الماء بارد','أفضل شرب الماء'],a:1},
+{id:4,subject:'math',skill:'حل المشكلات',q:'إذا كان مع سارة 24 قلمًا ووزعتها بالتساوي على 6 طالبات، فكم قلمًا لكل طالبة؟',o:['3','4','5','6'],a:1}
+];
+let questions=JSON.parse(localStorage.getItem('bf_questions')||'null')||defaultQuestions;
+let student=JSON.parse(localStorage.getItem('bf_student')||'null');
+let results=JSON.parse(localStorage.getItem('bf_results')||'{}');
+let currentQuiz=[],currentIndex=0,currentScore=0,currentSubject='';
+window.currentAnswerRows=[];
+const names={reading:'القراءة',science:'العلوم',math:'الرياضيات'};
+
+async function loadStudentSession(){
+  try{
+    const {data:{session}} = await supabaseClient.auth.getSession();
+    if(!session || !session.user || !session.user.is_anonymous) return false;
+    const {data:profile}=await supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',session.user.id).maybeSingle();
+    if(profile && profile.role==='student'){
+      studentAuthUser=session.user;
+      studentCloudProfile=profile;
+      const cls=cloudClassNameById(profile.class_id);
+      student={name:profile.full_name||'',class:cls||'غير محدد',id:profile.id};
+      localStorage.setItem('bf_student',JSON.stringify(student));
+      await loadStudentCloudResults();
+      return true;
+    }
+  }catch(e){console.warn('student session:',e)}
+  return false;
+}
+function cloudClassNameById(id){
+  const row=(window.cloudClasses||[]).find(x=>String(x.id)===String(id));
+  return row?.name||row?.title||row?.class_name||'';
+}
+async function loadCloudClasses(){
+  try{const {data}=await supabaseClient.from('classes').select('*'); window.cloudClasses=Array.isArray(data)?data:[];}catch(e){window.cloudClasses=[];}
+}
+async function loginStudent(){
+  const n=document.getElementById('studentName').value.trim();
+  const c=document.getElementById('studentClass').value;
+  if(!n){alert('فضلاً اكتبي اسم الطالبة');return}
+  if(!c){alert('فضلاً اختاري الصف');return}
+  try{
+    await loadCloudClasses();
+    const classRow=(window.cloudClasses||[]).find(x=>String(x.name||x.title||x.class_name||'')===c);
+    if(!classRow){alert('تعذر العثور على الفصل في قاعدة البيانات.');return}
+    const {data,error}=await supabaseClient.auth.signInAnonymously({options:{data:{full_name:n,role:'student',class_id:classRow.id}}});
+    if(error){console.warn(error);alert('تعذر إنشاء دخول الطالبة. تأكدي من تفعيل Anonymous Sign-Ins في Supabase.');return}
+    studentAuthUser=data.user;
+    const {data:profile,error:pe}=await supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',data.user.id).maybeSingle();
+    if(pe || !profile){alert('تم إنشاء الدخول لكن لم يتم إنشاء ملف الطالبة في قاعدة البيانات.');return}
+    studentCloudProfile=profile;
+    student={name:profile.full_name||n,class:c,id:profile.id};
+    results[student.name]=results[student.name]||{class:c,reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0}};
+    localStorage.setItem('bf_student',JSON.stringify(student));
+    localStorage.setItem('bf_results',JSON.stringify(results));
+    await loadStudentCloudResults();
+    show('student');
+  }catch(e){console.error(e);alert('حدث خطأ أثناء دخول الطالبة.');}
+}
+async function loadStudentCloudResults(){
+  if(!studentAuthUser)return;
+  try{
+    const {data,error}=await supabaseClient.from('attempts').select('*').eq('student_id',studentAuthUser.id).order('created_at',{ascending:false});
+    if(error){console.warn('student attempts:',error);return}
+    const r={class:student?.class||'غير محدد',reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0},domains:{}};
+    (data||[]).forEach(a=>{
+      const sub=subjectKeyFromId(a.subject_id)||a.subject||a.subject_key;
+      if(!['reading','science','math'].includes(sub))return;
+      const pct=Number(a.score ?? a.percentage ?? 0);
+      const total=Number(a.total_questions ?? a.total ?? 0);
+      const x=r[sub]||{score:0,attempts:0};
+      x.score=Math.max(x.score,pct); x.attempts=(x.attempts||0)+1; r[sub]=x;
+    });
+    results[student.name]=r;
+    localStorage.setItem('bf_results',JSON.stringify(results));
+  }catch(e){console.warn('loadStudentCloudResults:',e)}
+}
+function subjectKeyFromId(id){const row=cloudSubjects.find(s=>String(s.id)===String(id));return row?subjectKeyFromRow(row):null}
+async function saveStudentAttemptToCloud(score,total,subject,domainScores){
+  if(!studentAuthUser)return;
+  const subjectRow=subjectRowByKey(subject);
+  const payload={student_id:studentAuthUser.id,subject_id:subjectRow?.id||null,score,total_questions:total};
+  const {data,error}=await supabaseClient.from('attempts').insert(payload).select('*').single();
+  if(error){console.warn('save attempt:',error);return}
+  if(window.currentAnswerRows?.length && data?.id){
+    const rows=window.currentAnswerRows.map(x=>({attempt_id:data.id,question_id:x.question_id,selected_index:x.selected_index,is_correct:x.is_correct}));
+    const ar=await supabaseClient.from('answers').insert(rows);
+    if(ar.error)console.warn('save answers:',ar.error);
+  }
+}
+async function logoutStudent(){
+  try{await supabaseClient.auth.signOut()}catch(e){}
+  studentAuthUser=null;studentCloudProfile=null;student=null;localStorage.removeItem('bf_student');show('home');
+}
+
+async function openTeacherLogin(){
+  document.getElementById('teacherLoginMsg').innerHTML='';
+  document.getElementById('teacherEmail').value='';
+  document.getElementById('teacherPassword').value='';
+  show('teacherLogin');
+}
+async function loginTeacher(){
+  const email=document.getElementById('teacherEmail').value.trim();
+  const password=document.getElementById('teacherPassword').value;
+  const msg=document.getElementById('teacherLoginMsg');
+  if(!email||!password){msg.innerHTML='<div class="notice">أدخلي البريد الإلكتروني وكلمة المرور.</div>';return}
+  msg.innerHTML='<div class="notice">⏳ جارٍ التحقق...</div>';
+  const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
+  if(error){msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+(error.message||'تحققي من البيانات.')+'</div>';return}
+  const {data:profile,error:pe}=await supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',data.user.id).maybeSingle();
+  if(pe||!profile){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">تم تسجيل الدخول لكن لم يتم العثور على ملف الصلاحيات.</div>';return}
+  if(!['admin','teacher'].includes(profile.role)){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">هذا الحساب ليس حساب معلمة أو مشرفة.</div>';return}
+  cloudProfile=profile; cloudReady=true;
+  await loadCloudReferenceData();
+  await loadCloudQuestions();
+  show('teacher');
+}
+async function logoutTeacher(){
+  await supabaseClient.auth.signOut(); cloudProfile=null; cloudReady=false; show('home');
+}
+async function loadCloudQuestions(){
+  try{
+    let query=supabaseClient.from('questions').select('*').order('created_at',{ascending:false});
+    if(cloudProfile?.role==='teacher') query=query.eq('created_by',cloudProfile.id);
+    const {data,error}=await query;
+    if(error){console.warn('questions query:',error);return false}
+    questions=(Array.isArray(data)?data:[]).map(mapCloudQuestion);
+    localStorage.setItem('bf_questions',JSON.stringify(questions));
+    return true;
+  }catch(e){console.warn('loadCloudQuestions:',e);return false}
+}
+function mapCloudQuestion(x){
+  const subjectRow=cloudSubjects.find(s=>String(s.id)===String(x.subject_id));
+  const subject=subjectRow?subjectKeyFromRow(subjectRow):(x.subject||x.subject_key||x.subject_code||x.subject_id);
+  const options=x.options||x.o||[];
+  return {id:x.id,subject,subject_id:x.subject_id||null,skill:x.skill||x.domain||x.domain_name||domainNameById(x.domain_id)||x.domain_id,q:x.question_text||x.question||x.q,o:Array.isArray(options)?options:[],a:Number(x.correct_index ?? x.correct_answer ?? x.a ?? 0),difficulty:x.difficulty||'متوسط',trainingType:x.training_type||x.trainingType||'independent',passage:x.passage||null,created_by:x.created_by,is_published:x.is_published??x.published??false};
+}
+function currentTeacherSubject(){
+  if(cloudProfile?.role!=='teacher') return null;
+  const row=cloudSubjects.find(s=>String(s.id)===String(cloudProfile.subject_id));
+  return row?subjectKeyFromRow(row):null;
+}
+function applyTeacherSubjectLock(){
+  const sel=document.getElementById('newSubject');
+  if(!sel)return;
+  if(cloudProfile?.role==='teacher'){
+    const key=currentTeacherSubject();
+    if(key){sel.value=key;sel.disabled=true;}
+  }else{sel.disabled=false;}
+}
+async function insertCloudQuestion(q){
+  if(!cloudReady)return false;
+  const subjectKey=q.subject;
+  const subjectRow=subjectRowByKey(subjectKey);
+  const domainRow=cloudDomains.find(d=>String(d.name||d.title||d.key||'')===String(q.skill));
+  const payload={question_text:q.q,options:q.o,correct_index:q.a,difficulty:q.difficulty,created_by:cloudProfile.id,is_published:false};
+  if(subjectRow) payload.subject_id=subjectRow.id;
+  if(domainRow) payload.domain_id=domainRow.id;
+  if(q.trainingType) payload.training_type=q.trainingType;
+  if(q.passage) payload.passage=q.passage;
+  const {data,error}=await supabaseClient.from('questions').insert(payload).select('*').single();
+  if(error){console.warn('insert question:',error);return false}
+  q.id=data.id; q.created_by=cloudProfile.id; q.subject_id=data.subject_id||payload.subject_id||null; q.is_published=data.is_published??false; return true;
+}
+async function deleteCloudQuestion(id){
+  if(!cloudReady)return false;
+  let query=supabaseClient.from('questions').delete().eq('id',id);
+  if(cloudProfile?.role==='teacher') query=query.eq('created_by',cloudProfile.id);
+  const {error}=await query;
+  if(error){console.warn('delete question:',error);return false}
+  return true;
+}
+
+
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='student')renderStudent();if(id==='teacher'){if(!cloudReady){show('teacherLogin');return}renderTeacher()}}
+function loginStudent(){let n=document.getElementById('studentName').value.trim(),c=document.getElementById('studentClass').value;if(!n){alert('فضلاً اكتبي اسم الطالبة');return}if(!c){alert('فضلاً اختاري الصف');return}student={name:n,class:c||'غير محدد'};if(!results[n])results[n]={class:student.class,reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0}};localStorage.setItem('bf_student',JSON.stringify(student));localStorage.setItem('bf_results',JSON.stringify(results));show('student')}
+function renderStudent(){if(!student)return show('studentLogin');document.getElementById('displayName').textContent=student.name;let r=results[student.name]||{};let vals=['reading','science','math'].map(x=>r[x]?.score||0);document.getElementById('avg').textContent=Math.round(vals.reduce((a,b)=>a+b,0)/3)+'%';document.getElementById('done').textContent=Object.values(r).filter(x=>x&&x.attempts).reduce((a,b)=>a+(b.attempts||0),0);document.getElementById('points').textContent=Object.values(r).filter(x=>x&&x.attempts).reduce((a,b)=>a+(b.score||0),0);['reading','science','math'].forEach(x=>document.getElementById(x+'Prog').style.width=(r[x]?.score||0)+'%');let b=[];if(vals.some(v=>v>=70))b.push('🌟 بداية موفقة');if(vals.some(v=>v>=90))b.push('🏅 متفوقة');if(vals.every(v=>v>=80))b.push('🧭 سفيرة الفهم');document.getElementById('badges').textContent=b.length;renderStudentWeekly();document.getElementById('studentBadges').innerHTML=b.map(x=>`<span class="badge">${x}</span>`).join('')||'<span style="color:#777">أكملي أول تدريب لتحصلي على أول شارة.</span>'}
+function startQuiz(sub){
+currentSubject=sub;
+if(sub==='reading'){
+let hasPassage=questions.some(q=>q.subject==='reading'&&q.trainingType==='passage');
+let hasIndependent=questions.some(q=>q.subject==='reading'&&q.trainingType!=='passage');
+if(hasPassage&&hasIndependent){
+let choice=confirm('اضغطي «موافق» لتدريب القطعة والأسئلة، أو «إلغاء» للتدريبات المستقلة.');
+currentQuiz=questions.filter(q=>q.subject==='reading'&&(choice?q.trainingType==='passage':q.trainingType!=='passage'));
+}else if(hasPassage){
+currentQuiz=questions.filter(q=>q.subject==='reading'&&q.trainingType==='passage');
+}else{
+currentQuiz=questions.filter(q=>q.subject==='reading'&&q.trainingType!=='passage');
+}
+}else{
+currentQuiz=questions.filter(q=>q.subject===sub);
+}
+if(!currentQuiz.length){alert('لا توجد أسئلة في هذا القسم حاليًا.');return}currentIndex=0;currentScore=0;window.quizDomainScores={};window.currentAnswerRows=[];document.getElementById('quizTitle').textContent=names[sub];document.getElementById('quizHint').textContent='اختاري الإجابة الأنسب، وبعد الإجابة ستنتقلين للسؤال التالي.';show('quiz');renderQuestion()}
+function renderQuestion(){
+if(currentIndex>=currentQuiz.length){finishQuiz();return}
+let q=currentQuiz[currentIndex];
+let passage=(q.trainingType==='passage')?q.passage:null;
+if(passage){
+document.getElementById('questionArea').innerHTML=`
+<div class="reading-layout">
+<div class="reading-passage"><div class="question-number">📖 قطعة القراءة</div>${escapeHtml(passage)}</div>
+<div class="reading-questions">
+<div class="question-card">
+<div class="question-number">السؤال ${currentIndex+1} من ${currentQuiz.length}</div>
+<div style="color:#777;font-size:13px;margin-bottom:10px">المجال: ${q.skill} · الصعوبة: ${q.difficulty||'متوسط'}</div>
+<div class="qtext">${q.q}</div>
+${q.o.map((o,i)=>`<button class="option" onclick="answer(${i},this)">${o}</button>`).join('')}
+</div>
+</div></div>`;
+}else{
+document.getElementById('questionArea').innerHTML=`<div style="color:#8b7b99">السؤال ${currentIndex+1} من ${currentQuiz.length} · المجال: ${q.skill}</div><div class="qtext">${q.q}</div>${q.o.map((o,i)=>`<button class="option" onclick="answer(${i},this)">${o}</button>`).join('')}`;
+}}
+function escapeHtml(text){
+return text.replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]});
+}
+function answer(i,btn){let q=currentQuiz[currentIndex];window.currentAnswerRows.push({question_id:q.id,selected_index:i,is_correct:i===q.a});if(!window.quizDomainScores)window.quizDomainScores={};if(!window.quizDomainScores[q.skill])window.quizDomainScores[q.skill]={correct:0,total:0};window.quizDomainScores[q.skill].total++;document.querySelectorAll('.option').forEach(b=>b.disabled=true);if(i===q.a){btn.classList.add('correct');currentScore++;window.quizDomainScores[q.skill].correct++}else{btn.classList.add('wrong');document.querySelectorAll('.option')[q.a].classList.add('correct')}setTimeout(()=>{currentIndex++;renderQuestion()},650)}
+function finishQuiz(){
+let score=Math.round(currentScore/currentQuiz.length*100),r=results[student.name]||{class:student.class};
+let old=r[currentSubject]||{score:0,attempts:0};
+r[currentSubject]={score:Math.max(old.score,score),attempts:(old.attempts||0)+1,last:score};
+if(!r.domains)r.domains={};
+if(!r.domains[currentSubject])r.domains[currentSubject]={};
+let domainGroups={};
+currentQuiz.forEach((q,idx)=>{
+if(!domainGroups[q.skill])domainGroups[q.skill]={correct:0,total:0};
+domainGroups[q.skill].total++;
+if(idx<currentQuiz.length && idx<currentQuiz.length){
+}
+});
+currentQuiz.forEach((q,idx)=>{
+// currentScore is total only; calculate domain performance from the stored answer map when available
+});
+if(window.quizDomainScores){
+Object.keys(window.quizDomainScores).forEach(domain=>{
+let d=window.quizDomainScores[domain], pct=d.total?Math.round(d.correct/d.total*100):0;
+let oldD=r.domains[currentSubject][domain]||{score:0,attempts:0};
+r.domains[currentSubject][domain]={score:Math.max(oldD.score,pct),attempts:oldD.attempts+1,last:pct};
+if(!r.domainHistory)r.domainHistory={};
+if(!r.domainHistory[currentSubject])r.domainHistory[currentSubject]={};
+if(!r.domainHistory[currentSubject][domain])r.domainHistory[currentSubject][domain]=[];
+r.domainHistory[currentSubject][domain].push({score:pct,date:new Date().toISOString()});
+});
+}
+results[student.name]=r;localStorage.setItem('bf_results',JSON.stringify(results));
+saveStudentAttemptToCloud(score,currentQuiz.length,currentSubject,window.quizDomainScores);
+document.getElementById('quizHint').textContent='أحسنتِ! تم حفظ نتيجتك في رحلتك.';
+document.getElementById('questionArea').innerHTML=`<div style="text-align:center;padding:35px"><div style="font-size:60px">🎉</div><h2>نتيجتك ${score}%</h2><p>تم حفظ النتيجة ويمكن للمعلمة الاطلاع عليها من لوحة التحكم.</p><button onclick="show('student')">العودة إلى رحلتي</button></div>`;
+}
+
+let weeklyTasks=JSON.parse(localStorage.getItem('bf_journeys')||'{}');
+let weeklyAnswers=JSON.parse(localStorage.getItem('bf_journeys_answers')||'{}');
+
+function renderWeeklyBank(){
+let box=document.getElementById('weeklyQuestionBank'); if(!box)return;
+let subject=document.getElementById('weeklySubject')?.value||'all';
+let filtered=questions.filter(q=>subject==='all'||q.subject===subject);
+box.innerHTML=filtered.map((q,i)=>`<label style="display:block;background:#faf8fc;border:1px solid #eee;padding:14px;border-radius:14px;margin:8px 0;cursor:pointer">
+<input type="checkbox" class="weekly-q" value="${q.id}"> 
+<b>${names[q.subject]}</b> · ${q.skill} · ${q.difficulty||'متوسط'}<br>
+<span>${q.q}</span></label>`).join('')||'<div class="empty">لا توجد أسئلة لهذه المادة في بنك الأسئلة.</div>';
+}
+
+function getJourneyStore(){
+  return JSON.parse(localStorage.getItem('bf_journeys') || '[]');
+}
+function saveJourneyStore(items){
+  localStorage.setItem('bf_journeys', JSON.stringify(items));
+}
+async function setQuestionsPublished(ids, published){
+  if(!cloudReady){
+    questions.forEach(q=>{ if(ids.includes(String(q.id))) q.is_published=published; });
+    localStorage.setItem('bf_questions',JSON.stringify(questions));
+    return true;
+  }
+  let query=supabaseClient.from('questions').update({is_published:published}).in('id',ids);
+  if(cloudProfile?.role==='teacher') query=query.eq('created_by',cloudProfile.id);
+  const {error}=await query;
+  if(error){console.warn('publish questions:',error);return false}
+  questions.forEach(q=>{ if(ids.includes(String(q.id))) q.is_published=published; });
+  localStorage.setItem('bf_questions',JSON.stringify(questions));
+  return true;
+}
+async function toggleQuestionPublished(id){
+  const q=questions.find(x=>String(x.id)===String(id));
+  if(!q)return;
+  const next=!q.is_published;
+  const ok=await setQuestionsPublished([String(id)],next);
+  if(!ok){alert('تعذر تحديث حالة النشر.');return;}
+  renderWeeklyBank();
+  renderPublishedTasks();
+  renderStudentWeekly();
+  alert(next?'تم نشر السؤال للطالبات.':'تم إيقاف نشر السؤال.');
+}
+function createJourneyFromSelected(ids, subject){
+  // kept for compatibility with the previous prototype; publication is now stored in Supabase.
+  return {id:'cloud_'+Date.now(),subject,questionIds:ids,active:true,publishedAt:new Date().toISOString()};
+}
+async function publishWeeklyTask(){
+  const ids=[...document.querySelectorAll('#weeklyQuestionBank input[type="checkbox"]:checked')].map(x=>String(x.value));
+  const subject=document.getElementById('weeklySubject')?.value||'all';
+  if(subject==='all'){alert('اختاري مادة واحدة أولًا.');return;}
+  if(ids.length<1){alert('اختاري سؤالًا واحدًا أو أكثر أولًا.');return;}
+  const ok=await setQuestionsPublished(ids,true);
+  if(!ok){alert('تعذر نشر الأسئلة.');return;}
+  document.querySelectorAll('#weeklyQuestionBank input[type="checkbox"]').forEach(x=>x.checked=false);
+  renderWeeklyBank();
+  renderPublishedTasks();
+  renderStudentWeekly();
+  renderStats();
+  alert('تم نشر الأسئلة للطالبات بنجاح.');
+}
+function renderPublishedTasks(){
+  const box=document.getElementById('publishedTasks');
+  if(!box)return;
+  const subject=document.getElementById('weeklySubject')?.value||'all';
+  let items=questions.filter(q=>q.is_published && (subject==='all'||q.subject===subject));
+  if(cloudProfile?.role==='teacher') items=items.filter(q=>q.created_by===cloudProfile.id);
+  if(!items.length){box.innerHTML='<div class="empty">لا توجد أسئلة منشورة حاليًا.</div>';return;}
+  box.innerHTML=items.map((q,i)=>`
+    <div class="task-card">
+      <div>
+        <strong>📚 ${names[q.subject]||q.subject}</strong>
+        <div class="muted">${q.trainingType==='passage'?'📖 قطعة وأسئلة':'📝 سؤال مستقل'} · ${q.skill||'غير محدد'}</div>
+        <div class="status active">🟢 منشور</div>
+        <div style="margin-top:8px">${q.q||''}</div>
+      </div>
+      <div class="task-actions"><button class="secondary" onclick="toggleQuestionPublished('${q.id}')">⏸ إيقاف</button></div>
+    </div>`).join('');
+}
+function renderWeeklyBank(){
+  const box=document.getElementById('weeklyQuestionBank'); if(!box)return;
+  const subject=document.getElementById('weeklySubject')?.value||'all';
+  let filtered=questions.filter(q=>subject==='all'||q.subject===subject);
+  if(cloudProfile?.role==='teacher') filtered=filtered.filter(q=>q.created_by===cloudProfile.id);
+  box.innerHTML=filtered.map((q,i)=>`<label style="display:block;background:#faf8fc;border:1px solid #eee;padding:14px;border-radius:14px;margin:8px 0;cursor:pointer">
+    <input type="checkbox" class="weekly-q" value="${q.id}" ${q.is_published?'checked':''}>
+    <b>${names[q.subject]}</b> · ${q.skill||'غير محدد'} · ${q.difficulty||'متوسط'}
+    <span class="status ${q.is_published?'active':'inactive'}" style="margin-right:8px">${q.is_published?'🟢 منشور':'⚪ غير منشور'}</span><br>
+    <span>${q.q||''}</span></label>`).join('')||'<div class="empty">لا توجد أسئلة لهذه المادة في بنك الأسئلة.</div>';
+}
+
+function renderStudentWeekly(){
+  const box = document.getElementById('studentWeekly') || document.getElementById('studentWeeklyTask');
+  if(!box) return;
+  const journeys = [{id:'published',title:'الأسئلة المنشورة',subject:'جميع المواد',questionIds:questions.filter(q=>q.is_published).map(q=>q.id),active:true}].filter(x=>x.questionIds.length);
+  if(!journeys.length){
+    box.innerHTML = '<div class="empty">لا توجد أسئلة منشورة حاليًا.</div>';
+    return;
+  }
+  const questions = getQuestions();
+  box.innerHTML = journeys.map(j => {
+    const qs = j.questionIds.map(id => questions.find(q => q.id == id)).filter(Boolean);
+    return `
+      <div class="journey-student-card">
+        <div class="journey-head">
+          <div><strong>🧭 ${j.title}</strong><div class="muted">${j.subject} · ${qs.length} سؤال</div></div>
+          <span class="status active">🟢 نشطة</span>
+        </div>
+        ${qs.map((q,i)=>`
+          <div class="journey-q">
+            <div class="muted">السؤال ${i+1} · ${q.skill || ''}</div>
+            <div>${q.q || ''}</div>
+            ${(q.o||[]).map((op,k)=>`<label class="option"><input type="radio" name="jq_${j.id}_${q.id}" value="${k}"> ${op}</label>`).join('')}
+          </div>
+        `).join('')}
+        <button class="primary" onclick="submitJourney('${j.id}')">إرسال الرحلة</button>
+      </div>`;
+  }).join('');
+}
+function submitJourney(jid){
+  const journeys = getJourneyStore();
+  const j = journeys.find(x=>x.id===jid);
+  if(!j) return;
+  const questions = getQuestions();
+  const student = JSON.parse(localStorage.getItem('bf_student') || '{}');
+  let score=0, answered=0;
+  j.questionIds.forEach(id=>{
+    const q=questions.find(x=>x.id==id);
+    const el=document.querySelector(`input[name="jq_${jid}_${id}"]:checked`);
+    if(el){ answered++; if(String(el.value)===String(q.a)) score++; }
+  });
+  if(answered < j.questionIds.length){
+    alert('يرجى الإجابة عن جميع أسئلة الرحلة قبل الإرسال.');
+    return;
+  }
+  const results=JSON.parse(localStorage.getItem('bf_results')||'[]');
+  results.push({
+    student: student.name || 'طالبة',
+    class: student.class || '',
+    subject: j.subject,
+    journeyId: j.id,
+    journeyTitle: j.title,
+    score,
+    total:j.questionIds.length,
+    date:new Date().toISOString()
+  });
+  localStorage.setItem('bf_results',JSON.stringify(results));
+  alert(`أحسنتِ! نتيجتك ${score} من ${j.questionIds.length}.`);
+}
+function answerWeekly(week,qid,choice,btn){
+let q=questions.find(x=>x.id===qid);if(!q)return;
+document.querySelectorAll('.option').forEach(b=>b.disabled=true);
+if(choice===q.a)btn.classList.add('correct');else{btn.classList.add('wrong');document.querySelectorAll('.option')[q.a].classList.add('correct')}
+setTimeout(()=>{
+let current=weeklyTasks[week], key=student.name+'_'+week;
+let existing=weeklyAnswers[key]||{correct:0,total:0};
+existing.total++;if(choice===q.a)existing.correct++;
+if(existing.total===current.questionIds.length)existing.score=Math.round(existing.correct/existing.total*100);
+weeklyAnswers[key]=existing;localStorage.setItem('bf_journeys_answers',JSON.stringify(weeklyAnswers));
+if(existing.total===current.questionIds.length){
+let r=results[student.name]||{class:student.class};
+if(!r.weekly)r.weekly={};r.weekly[week]=existing;
+results[student.name]=r;localStorage.setItem('bf_results',JSON.stringify(results));
+}
+renderStudentWeekly();
+},650);
+}
+
+let reportMode='class';
+
+function getResultRows(){
+  let raw=JSON.parse(localStorage.getItem('bf_results')||'{}');
+  if(Array.isArray(raw)) return raw;
+  let rows=[];
+  Object.keys(raw).forEach(name=>{
+    let r=raw[name]||{};
+    ['reading','science','math'].forEach(sub=>{
+      if(r[sub] && (r[sub].attempts||r[sub].score)){
+        rows.push({student:name,class:r.class||'',subject:sub,score:r[sub].score||0,total:100});
+      }
+    });
+  });
+  return rows;
+}
+function scorePct(r){
+  if(r.total && r.total!==100) return Math.round((Number(r.score||0)/Number(r.total))*100);
+  return Math.round(Number(r.score||0));
+}
+function printResults(){
+  let el=document.getElementById('dashboard');
+  printBlock(el,'نتائج الطالبات - بوصلة الفهم');
+}
+function printCurrentReport(){
+  let el=document.getElementById('reportOutput');
+  printBlock(el,'تقرير بوصلة الفهم');
+}
+function printBlock(el,title){
+  if(!el)return;
+  let w=window.open('','_blank');
+  w.document.write(`<html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${title}</title><style>
+  body{font-family:Arial,sans-serif;padding:30px;color:#222}h1,h2,h3{text-align:center;color:#5d479c}
+  table{width:100%;border-collapse:collapse;margin:20px 0}th,td{border:1px solid #ccc;padding:9px;text-align:right}th{background:#f2edf9}
+  .chart-wrap{border:1px solid #ddd;border-radius:12px;padding:15px;margin:20px 0}.chart-bars{display:flex;align-items:flex-end;gap:18px;height:220px;padding:25px 10px 5px;border-bottom:1px solid #aaa}.chart-col{flex:1;text-align:center}.chart-bar{margin:auto;width:50px;background:#7657c8;border-radius:10px 10px 0 0;position:relative}.chart-bar span{position:absolute;top:-24px;left:0;right:0}.chart-label{font-size:12px;margin-top:6px}.stat{display:inline-block;border:1px solid #ddd;padding:12px;margin:5px;border-radius:10px}
+  </style></head><body><h2>${title}</h2>${el.innerHTML}</body></html>`);
+  w.document.close();w.focus();setTimeout(()=>w.print(),250);
+}
+function populateReportStudents(){
+  let sel=document.getElementById('reportStudent'); if(!sel)return;
+  let names=[...new Set(getResultRows().map(r=>r.student).filter(Boolean))];
+  sel.innerHTML=names.map(n=>`<option value="${n}">${n}</option>`).join('')||'<option>لا توجد بيانات</option>';
+}
+function avg(arr){return arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length):0}
+function chartHTML(data,title){
+  return `<div class="chart-wrap"><h3>${title}</h3><div class="chart-bars">${data.map(x=>`<div class="chart-col"><div class="chart-bar" style="height:${Math.max(4,x.value*1.7)}px"><span>${x.value}%</span></div><div class="chart-label">${x.label}</div></div>`).join('')}</div></div>`;
+}
+function renderReports(){
+  let out=document.getElementById('reportOutput'); if(!out)return;
+  let rows=getResultRows();
+  let classCtl=document.getElementById('classReportControls'), studentCtl=document.getElementById('studentReportControls');
+  classCtl.style.display=reportMode==='class'?'flex':'none';
+  studentCtl.style.display=reportMode==='student'?'block':'none';
+  populateReportStudents();
+  if(reportMode==='student'){
+    let name=document.getElementById('reportStudent')?.value;
+    let rr=rows.filter(r=>r.student===name);
+    let data=['reading','science','math'].map(su=>({label:names[su],value:avg(rr.filter(r=>r.subject===su).map(scorePct))}));
+    out.innerHTML=`<h2>تقرير الطالبة: ${name||'-'}</h2>
+    <div class="stats"><div class="stat">متوسط الأداء<b>${avg(rr.map(scorePct))}%</b></div><div class="stat">عدد المحاولات<b>${rr.length}</b></div></div>
+    ${chartHTML(data,'متوسط الأداء حسب المادة')}
+    <table><thead><tr><th>المادة</th><th>النتيجة</th></tr></thead><tbody>${rr.map(r=>`<tr><td>${names[r.subject]||r.subject}</td><td>${scorePct(r)}%</td></tr>`).join('')||'<tr><td colspan="2">لا توجد نتائج.</td></tr>'}</tbody></table>`;
+  }else{
+    let cls=document.getElementById('reportClass')?.value;
+    let sub=document.getElementById('reportSubject')?.value||'all';
+    let rr=rows.filter(r=>(cls==='all'||r.class===cls) && (sub==='all'||r.subject===sub));
+    let students=[...new Set(rr.map(r=>r.student))];
+    let subjectData=['reading','science','math'].filter(x=>sub==='all'||x===sub).map(su=>({label:names[su],value:avg(rr.filter(r=>r.subject===su).map(scorePct))}));
+    let studentData=students.map(n=>({label:n,value:avg(rr.filter(r=>r.student===n).map(scorePct))}));
+    out.innerHTML=`<h2>${cls==='all'?'تقرير جميع الفصول':'تقرير الفصل: '+(cls||'-')}</h2><p style="text-align:center">${sub==='all'?'جميع المواد':names[sub]}</p>
+    <div class="stats"><div class="stat">عدد الطالبات<b>${students.length}</b></div><div class="stat">متوسط الفصل<b>${avg(rr.map(scorePct))}%</b></div><div class="stat">عدد المحاولات<b>${rr.length}</b></div></div>
+    ${chartHTML(subjectData,'متوسط الفصل حسب المادة')}
+    ${studentData.length&&cls!=='all'?chartHTML(studentData,'متوسط أداء الطالبات'):''}${cls==='all'?chartHTML(['ثالث أول','ثالث ثاني','ثالث ثالث'].map(c=>({label:c,value:avg(rr.filter(r=>r.class===c).map(scorePct))})),'متوسط الأداء حسب الفصل'):''}
+    <table><thead><tr><th>الطالبة</th>${cls==='all'?'<th>الفصل</th>':''}<th>المادة</th><th>النتيجة</th></tr></thead><tbody>${rr.map(r=>`<tr><td>${r.student}</td>${cls==='all'?`<td>${r.class||'-'}</td>`:''}<td>${names[r.subject]||r.subject}</td><td>${scorePct(r)}%</td></tr>`).join('')||`<tr><td colspan="${cls==='all'?4:3}">لا توجد نتائج.</td></tr>`}</tbody></table>`;
+  }
+}
+function teacherTab(id,btn){document.querySelectorAll('.teacherTab').forEach(x=>x.style.display='none');document.getElementById(id).style.display='block';document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');if(id==='bank')renderBank();if(id==='weekly'){renderWeeklyBank();renderPublishedTasks()}if(id==='support'){renderSupportPlan()}if(id==='reports'){populateReportStudents();renderReports()}}
+function updateSkillOptions(){
+let sub=document.getElementById('newSubject').value;
+let skills={
+reading:['استيعاب المقروء','دلالات الألفاظ'],
+science:['علوم الحياة','علم الأرض والفلك','العلوم الفيزيائية والكيميائية'],
+math:['الهندسة والقياس','الأعداد والعمليات عليها','البيانات والاحتمالات','الجبر']
+};
+document.getElementById('newSkill').innerHTML=(skills[sub]||[]).map(x=>`<option>${x}</option>`).join('');
+}
+function renderResultsTable(){
+let classFilter=document.getElementById('classFilter')?.value||'all';
+let subjectFilter=document.getElementById('subjectFilter')?.value||'all';
+let arr=Object.keys(results).filter(n=>classFilter==='all'||results[n].class===classFilter);
+let headers = subjectFilter==='all'
+? '<th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th>'
+: '<th>الطالبة</th><th>الصف</th><th>المادة</th><th>النتيجة</th><th>عدد المحاولات</th>';
+document.querySelector('#dashboard table thead tr').innerHTML=headers;
+document.getElementById('resultsTable').innerHTML=arr.map(n=>{
+let r=results[n],v=['reading','science','math'].map(s=>r[s]?.score||0);
+if(subjectFilter!=='all'){
+let x=r[subjectFilter]||{score:0,attempts:0};
+return `<tr><td><b>${n}</b></td><td>${r.class||'-'}</td><td>${names[subjectFilter]}</td><td><b>${x.score||0}%</b></td><td>${x.attempts||0}</td></tr>`;
+}
+return `<tr><td><b>${n}</b></td><td>${r.class||'-'}</td><td>${v[0]}%</td><td>${v[1]}%</td><td>${v[2]}%</td><td><b>${Math.round(v.reduce((a,b)=>a+b,0)/3)}%</b></td></tr>`;
+}).join('')||`<tr><td colspan="${subjectFilter==='all'?6:5}" class="empty">لا توجد نتائج وفق التصفية المحددة حتى الآن.</td></tr>`;
+}
+function renderTeacher(){
+applyTeacherSubjectLock();
+let arr=Object.keys(results);
+document.getElementById('tStudents').textContent=arr.length;
+document.getElementById('tQuestions').textContent=questions.length;
+let attempts=0,sum=0,count=0;
+arr.forEach(n=>['reading','science','math'].forEach(s=>{
+let x=results[n][s];
+if(x?.attempts){attempts+=x.attempts;sum+=x.score;count++}
+}));
+document.getElementById('tAttempts').textContent=attempts;
+document.getElementById('tAverage').textContent=(count?Math.round(sum/count):0)+'%';
+renderResultsTable();
+applyTeacherSubjectLock();
+updateSkillOptions();
+toggleQuestionBuilder();
+renderBank();
+}
+
+function populateReportStudents(){
+let sel=document.getElementById('reportStudent');
+if(!sel)return;
+let current=sel.value;
+sel.innerHTML='<option value="">اختاري الطالبة</option>'+Object.keys(results).map(n=>`<option value="${n}">${n} — ${results[n].class||''}</option>`).join('');
+if(current && results[current])sel.value=current;
+}
+function renderStudentReport(){
+let n=document.getElementById('reportStudent')?.value;
+let box=document.getElementById('studentReport');
+if(!n){box.innerHTML='<div class="empty">اختاري طالبة لعرض التقرير التفصيلي.</div>';return}
+let r=results[n], rows=[], totalAttempts=0, totalScore=0;
+['reading','science','math'].forEach(sub=>{
+let domains={
+reading:['استيعاب المقروء','دلالات الألفاظ'],
+science:['علوم الحياة','علم الأرض والفلك','العلوم الفيزيائية والكيميائية'],
+math:['الهندسة والقياس','الأعداد والعمليات عليها','البيانات والاحتمالات','الجبر']
+}[sub];
+domains.forEach(domain=>{
+let relevant=questions.filter(q=>q.subject===sub&&q.skill===domain);
+let score=r?.domains?.[sub]?.[domain]?.score;
+let attempts=r?.domains?.[sub]?.[domain]?.attempts||0;
+if(score===undefined) score=0;
+rows.push({sub,domain,score,attempts,count:relevant.length});
+if(attempts){totalAttempts+=attempts;totalScore+=score}
+});
+});
+let avg=totalAttempts?Math.round(totalScore/totalAttempts):0;
+box.innerHTML=`<div id="printableReport" class="panel" style="border:1px solid #ddd">
+<div style="text-align:center;border-bottom:2px solid #7657c8;padding-bottom:15px;margin-bottom:18px">
+<h2 style="color:#7657c8;margin:5px">🧭 بوصلة الفهم</h2>
+<h3>تقرير أداء الطالبة حسب المجالات</h3>
+<p><b>الطالبة:</b> ${n} &nbsp;&nbsp; <b>الصف:</b> ${r.class||'-'}</p>
+</div>
+<table><thead><tr><th>المادة</th><th>المجال</th><th>النتيجة</th><th>المحاولات</th></tr></thead>
+<tbody>${rows.map(x=>`<tr><td>${names[x.sub]}</td><td>${x.domain}</td><td><b>${x.score}%</b></td><td>${x.attempts}</td></tr>`).join('')}</tbody></table>
+<div style="margin-top:20px;padding:15px;background:#f5f0ff;border-radius:14px">
+<b>متوسط الأداء في المجالات التي تم التدريب عليها: ${avg}%</b>
+</div>
+<p style="color:#777;margin-top:20px">تم إصدار التقرير من منصة بوصلة الفهم.</p>
+</div>`;
+}
+function printStudentReport(){
+let content=document.getElementById('printableReport');
+if(!content){alert('اختاري طالبة أولاً.');return}
+let w=window.open('','_blank');
+w.document.write(`<html dir="rtl" lang="ar"><head><title>تقرير بوصلة الفهم</title><style>
+body{font-family:Arial,sans-serif;padding:35px;color:#222}h2,h3{text-align:center}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ccc;padding:10px;text-align:right}th{background:#f0ebfa}.panel{border:1px solid #ddd;padding:20px;border-radius:12px}@media print{button{display:none}}
+</style><style>
+.reading-builder{border:2px solid #e8def5;border-radius:20px;padding:20px;background:#fcfaff;margin:20px 0}
+.passage-box{width:100%;min-height:230px;max-height:360px;resize:vertical;overflow-y:auto;border:1px solid #ddd3ea;border-radius:15px;padding:16px;font-family:inherit;line-height:2;background:white}
+.question-builder{border:1px solid #eee2f5;border-radius:16px;padding:18px;margin:15px 0;background:#fff}
+.question-builder h4{margin-top:0;color:#7657c8}
+.reading-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch}
+.reading-passage{background:white;border:1px solid #e2d8ed;border-radius:18px;padding:22px;max-height:520px;overflow-y:auto;line-height:2.1;white-space:pre-wrap}
+.reading-questions{background:white;border:1px solid #e2d8ed;border-radius:18px;padding:22px;max-height:520px;overflow-y:auto}
+.question-card{border-bottom:1px solid #eee;padding-bottom:20px;margin-bottom:20px}
+.question-number{display:inline-block;background:#f0e7fb;color:#7657c8;border-radius:20px;padding:5px 12px;font-size:13px;margin-bottom:10px}
+@media(max-width:800px){.reading-layout{grid-template-columns:1fr}.reading-passage,.reading-questions{max-height:430px}}
+</style></head><body>${content.outerHTML}</body></html>`);
+w.document.close();w.focus();setTimeout(()=>w.print(),300);
+}
+
+let readingQuestionCount=0;
+function toggleQuestionBuilder(){
+let sub=document.getElementById('newSubject').value;
+let type=document.getElementById('trainingType')?.value||'independent';
+let isReading=sub==='reading';
+document.getElementById('trainingTypeWrap').style.display=isReading?'block':'none';
+document.getElementById('readingCreator').style.display=(isReading&&type==='passage')?'block':'none';
+document.getElementById('standardCreator').style.display=(isReading&&type==='passage')?'none':'block';
+updateSkillOptions();
+}
+function addReadingQuestion(){
+readingQuestionCount++;
+let id=readingQuestionCount;
+let domains={reading:['استيعاب المقروء','دلالات الألفاظ']}[document.getElementById('newSubject').value]||[];
+let options=domains.map(x=>`<option>${x}</option>`).join('');
+document.getElementById('readingQuestionsBuilder').insertAdjacentHTML('beforeend',`
+<div class="question-builder" id="rq${id}">
+<h4>السؤال ${id}</h4>
+<select class="input rq-domain"><option value="">اختاري مجال السؤال</option>${options}</select>
+<textarea class="input rq-text" rows="2" placeholder="اكتبي السؤال هنا"></textarea>
+<div class="form-grid">
+<input class="input rq-o1" placeholder="الخيار الأول">
+<input class="input rq-o2" placeholder="الخيار الثاني">
+<input class="input rq-o3" placeholder="الخيار الثالث">
+<input class="input rq-o4" placeholder="الخيار الرابع">
+<select class="input rq-correct"><option value="0">الإجابة الصحيحة: الأول</option><option value="1">الإجابة الصحيحة: الثاني</option><option value="2">الإجابة الصحيحة: الثالث</option><option value="3">الإجابة الصحيحة: الرابع</option></select>
+</div>
+<button type="button" class="secondary" onclick="document.getElementById('rq${id}').remove()">حذف السؤال</button>
+</div>`);
+}
+async function saveReadingTraining(){
+let passage=document.getElementById('passageText').value.trim();
+let blocks=[...document.querySelectorAll('.question-builder')];
+if(!passage){alert('ضعي قطعة القراءة أولاً.');return}
+if(!blocks.length){alert('أضيفي سؤالاً واحداً على الأقل.');return}
+let created=[];
+for(let b of blocks){
+let domain=b.querySelector('.rq-domain').value;
+let q=b.querySelector('.rq-text').value.trim();
+let o=[...b.querySelectorAll('.rq-o1,.rq-o2,.rq-o3,.rq-o4')].map(x=>x.value.trim());
+let a=+b.querySelector('.rq-correct').value;
+if(!domain||!q||o.some(x=>!x)){alert('أكملي بيانات جميع الأسئلة.');return}
+created.push({id:Date.now()+created.length,subject:'reading',trainingType:'passage',skill:domain,difficulty:document.getElementById('newDifficulty').value,q,o,a,passage,trainingId:'reading-'+Date.now()});
+}
+for(const item of created){ if(cloudReady){ const ok=await insertCloudQuestion(item); if(!ok){alert('تعذر حفظ أحد أسئلة قطعة القراءة في قاعدة البيانات.');return} } }
+questions.push(...created);
+localStorage.setItem('bf_questions',JSON.stringify(questions));
+document.getElementById('readingSaveMsg').innerHTML='<div class="notice">✅ تم حفظ قطعة القراءة وجميع أسئلتها بنجاح.</div>';
+document.getElementById('passageText').value='';
+document.getElementById('readingQuestionsBuilder').innerHTML='';
+readingQuestionCount=0;
+renderBank();
+}
+async function addQuestion(){
+if(cloudProfile?.role==='teacher'){const locked=currentTeacherSubject();if(locked&&document.getElementById('newSubject').value!==locked){alert('لا يمكنك إنشاء سؤال إلا في مادتك المحددة.');return}}
+let q=document.getElementById('newQuestion').value.trim(),o=[1,2,3,4].map(i=>document.getElementById('o'+i).value.trim()),a=+document.getElementById('correct').value;if(!q||o.some(x=>!x)){alert('أكملي السؤال والخيارات الأربعة.');return}const item={id:Date.now(),subject:document.getElementById('newSubject').value,trainingType:document.getElementById('trainingType')?.value||'independent',skill:document.getElementById('newSkill').value,difficulty:document.getElementById('newDifficulty').value,q,o,a};if(cloudReady){const ok=await insertCloudQuestion(item);if(!ok){alert('تعذر حفظ السؤال في قاعدة البيانات. لم يتم الحفظ محليًا لتجنب اختلاف البيانات.');return}}questions.push(item);localStorage.setItem('bf_questions',JSON.stringify(questions));document.getElementById('saveMsg').innerHTML='<div class="notice">✅ تم حفظ السؤال بنجاح.</div>';document.getElementById('newQuestion').value='';o.forEach((_,i)=>document.getElementById('o'+(i+1)).value='');renderTeacher()}
+async function deleteQuestionById(id){
+  const questionId=String(id);
+  const before=questions.length;
+  if(cloudReady){
+    const ok=await deleteCloudQuestion(id);
+    if(!ok){alert('تعذر حذف السؤال من قاعدة البيانات.');return}
+  }
+  questions=questions.filter(function(x){return String(x.id)!==questionId;});
+  if(questions.length===before){alert('لم يتم العثور على السؤال.');return}
+  localStorage.setItem('bf_questions',JSON.stringify(questions));
+  renderBank();
+  if(typeof renderTeacher==='function'){try{renderTeacher()}catch(e){console.warn(e)}}
+  alert('تم حذف السؤال من بنك الأسئلة.');
+}
+
+function renderBank(){
+  const bank = document.getElementById('bankList');
+  if(!bank) return;
+  if(!questions.length){
+    bank.innerHTML='<div class="empty">لا توجد أسئلة في بنك الأسئلة حاليًا.</div>';
+    return;
+  }
+  bank.innerHTML = questions.map(function(q,i){
+    const typeLabel = q.trainingType === 'passage' ? '📖 قطعة وأسئلة' : '📝 سؤال مستقل';
+    const answer = q.o && q.o[q.a] !== undefined ? q.o[q.a] : '-';
+    return '<div class="panel bank-question" style="box-shadow:none;border:1px solid #eee;position:relative;padding-left:78px">'
+      + '<button type="button" class="trash-question" title="حذف السؤال" aria-label="حذف السؤال" data-question-id="'+String(q.id)+'">🗑️</button>'
+      + '<b>'+(i+1)+'. '+(names[q.subject]||q.subject)+'</b> · <span style="color:#777">'+typeLabel+' · المجال: <strong>'+(q.skill||'غير محدد')+'</strong> · الصعوبة: '+(q.difficulty||'متوسط')+'</span>'
+      + (q.passage?'<div class="notice">📖 قطعة مرتبطة بهذا السؤال</div>':'')
+      + '<p>'+(q.q||'')+'</p><small>الإجابة الصحيحة: '+answer+'</small>'
+      + '</div>';
+  }).join('');
+
+  // ربط زر السلة مباشرة بعد إنشاء العناصر، دون onclick داخل HTML
+  bank.querySelectorAll('.trash-question').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      deleteQuestionById(btn.getAttribute('data-question-id'));
+    });
+  });
+}
+
+
+// ===== المرحلة الثالثة: لوحة النتائج السحابية + الأسئلة المنشورة للطالبات =====
+let cloudStudentProfiles = [];
+let cloudAttempts = [];
+let cloudAnswers = [];
+
+async function loadCloudAdminResults(){
+  if(!cloudReady || !cloudProfile || !['admin','teacher'].includes(cloudProfile.role)) return;
+  try{
+    let pq = supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('role','student');
+    if(cloudProfile.role==='teacher') pq = pq.eq('subject_id', cloudProfile.subject_id);
+    const [pr, ar] = await Promise.all([
+      pq,
+      supabaseClient.from('attempts').select('id,student_id,subject_id,score,total_questions,created_at').order('created_at',{ascending:false})
+    ]);
+    if(pr.error) throw pr.error;
+    if(ar.error) throw ar.error;
+    cloudStudentProfiles = pr.data || [];
+    cloudAttempts = ar.data || [];
+
+    // بناء النتائج من المحاولات السحابية
+    const byId={};
+    cloudStudentProfiles.forEach(p=>{
+      byId[p.id]={name:p.full_name||'طالبة',class:cloudClassNameById(p.class_id)||'-',reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0},domains:{}};
+    });
+    cloudAttempts.forEach(a=>{
+      if(!byId[a.student_id]) return;
+      const sub=subjectKeyById(a.subject_id);
+      if(!sub) return;
+      const x=byId[a.student_id][sub];
+      const score=Number(a.score)||0;
+      x.attempts++;
+      x.score=Math.max(x.score,score);
+    });
+    results={};
+    Object.values(byId).forEach(r=>{results[r.name]=r});
+    localStorage.setItem('bf_results',JSON.stringify(results));
+  }catch(e){ console.warn('cloud results:',e); }
+}
+
+function subjectKeyById(id){
+  const row=(cloudSubjects||[]).find(x=>String(x.id)===String(id));
+  return row?subjectKeyFromRow(row):null;
+}
+
+function renderResultsTable(){
+  const body=document.getElementById('resultsTable');
+  if(!body) return;
+  const cf=document.getElementById('classFilter')?.value||'all';
+  const sf=document.getElementById('subjectFilter')?.value||'all';
+  let arr=cloudStudentProfiles.map(p=>({p,r:results[p.full_name||'']})).filter(x=>x.r);
+  if(cf!=='all') arr=arr.filter(x=>x.r.class===cf);
+  const thead=document.querySelector('#dashboard table thead tr');
+  if(sf==='all'){
+    if(thead) thead.innerHTML='<th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th>';
+    body.innerHTML=arr.map(x=>{
+      const v=['reading','science','math'].map(s=>x.r[s]?.score||0);
+      const active=v.filter((_,i)=>x.r[['reading','science','math'][i]]?.attempts>0);
+      const avg=active.length?Math.round(active.reduce((a,b)=>a+b,0)/active.length):0;
+      return `<tr><td><b>${escapeHtml(x.r.name)}</b></td><td>${escapeHtml(x.r.class)}</td><td>${v[0]}%</td><td>${v[1]}%</td><td>${v[2]}%</td><td><b>${avg}%</b></td></tr>`;
+    }).join('')||'<tr><td colspan="6" class="empty">لا توجد نتائج محفوظة في قاعدة البيانات حتى الآن.</td></tr>';
+  }else{
+    if(thead) thead.innerHTML='<th>الطالبة</th><th>الصف</th><th>المادة</th><th>النتيجة</th><th>عدد المحاولات</th>';
+    body.innerHTML=arr.map(x=>{const z=x.r[sf]||{score:0,attempts:0};return `<tr><td><b>${escapeHtml(x.r.name)}</b></td><td>${escapeHtml(x.r.class)}</td><td>${names[sf]}</td><td><b>${z.score||0}%</b></td><td>${z.attempts||0}</td></tr>`}).join('')||'<tr><td colspan="5" class="empty">لا توجد نتائج لهذه المادة حتى الآن.</td></tr>';
+  }
+}
+
+async function renderTeacher(){
+  applyTeacherSubjectLock();
+  if(cloudReady) await loadCloudAdminResults();
+  const studentCount=cloudReady?cloudStudentProfiles.length:Object.keys(results).length;
+  document.getElementById('tStudents').textContent=studentCount;
+  document.getElementById('tQuestions').textContent=questions.length;
+  let attempts=0,sum=0,count=0;
+  if(cloudReady){
+    cloudAttempts.forEach(a=>{attempts++;sum+=Number(a.score)||0;count++;});
+  }else{
+    Object.keys(results).forEach(n=>['reading','science','math'].forEach(s=>{let x=results[n][s];if(x?.attempts){attempts+=x.attempts;sum+=x.score;count++}}));
+  }
+  document.getElementById('tAttempts').textContent=attempts;
+  document.getElementById('tAverage').textContent=(count?Math.round(sum/count):0)+'%';
+  renderResultsTable();
+  applyTeacherSubjectLock(); updateSkillOptions(); toggleQuestionBuilder(); renderBank();
+  if(typeof populateReportStudents==='function') populateReportStudents();
+}
+
+// الطالبات يرون المنشور فقط، وليس بنك الأسئلة المحلي كاملًا
+function startQuiz(sub){
+  currentSubject=sub;
+  let pool=questions.filter(q=>q.is_published===true && q.subject===sub);
+  if(sub==='reading'){
+    const hp=pool.some(q=>q.trainingType==='passage');
+    const hi=pool.some(q=>q.trainingType!=='passage');
+    if(hp&&hi){
+      const choice=confirm('اضغطي «موافق» لتدريب القطعة والأسئلة، أو «إلغاء» للتدريبات المستقلة.');
+      currentQuiz=pool.filter(q=>choice?q.trainingType==='passage':q.trainingType!=='passage');
+    }else if(hp) currentQuiz=pool.filter(q=>q.trainingType==='passage');
+    else currentQuiz=pool.filter(q=>q.trainingType!=='passage');
+  }else currentQuiz=pool;
+  if(!currentQuiz.length){alert('لا توجد أسئلة منشورة في هذا القسم حاليًا.');return;}
+  currentIndex=0;currentScore=0;window.quizDomainScores={};window.currentAnswerRows=[];
+  document.getElementById('quizTitle').textContent=names[sub];
+  document.getElementById('quizHint').textContent='اختاري الإجابة الأنسب، وبعد الإجابة ستنتقلين للسؤال التالي.';
+  show('quiz');renderQuestion();
+}
+
+// بعد تسجيل دخول الطالبة نعيد تحميل الأسئلة المنشورة من السحابة
+const _oldLoginStudent=loginStudent;
+loginStudent=async function(){
+  await _oldLoginStudent();
+  if(studentAuthUser){ await loadCloudQuestions(); renderStudent(); }
+};
+
+// تحديث لوحة النتائج عند فتحها أو بعد إكمال محاولة
+const _oldShow=show;
+show=async function(id){
+  _oldShow(id);
+  if(id==='teacher' && cloudReady) await renderTeacher();
+  if(id==='student' && studentAuthUser) { await loadStudentCloudResults(); renderStudent(); }
+};
+
+loadCloudSession();
+</script>
+</body></html><script>
+// ===== المرحلة الرابعة: التحليل التفصيلي حسب المجالات =====
+let cloudQuestionMap = {};
+let cloudDomainStats = {};
+
+async function loadCloudAdminResults(){
+  if(!cloudReady || !cloudProfile || !['admin','teacher'].includes(cloudProfile.role)) return;
+  try{
+    let pq = supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('role','student');
+    let aq = supabaseClient.from('attempts').select('id,student_id,subject_id,score,total_questions,created_at').order('created_at',{ascending:false});
+    if(cloudProfile.role==='teacher') aq=aq.eq('subject_id',cloudProfile.subject_id);
+    const qr=await supabaseClient.from('questions').select('id,subject_id,domain_id,question_text,correct_index');
+    if(qr.error) throw qr.error;
+    const [pr,ar]=await Promise.all([pq,aq]);
+    if(pr.error) throw pr.error; if(ar.error) throw ar.error;
+    cloudStudentProfiles=pr.data||[]; cloudAttempts=ar.data||[];
+    cloudQuestionMap={}; (qr.data||[]).forEach(q=>cloudQuestionMap[String(q.id)]=q);
+    cloudDomainStats={};
+    const attemptIds=cloudAttempts.map(a=>a.id).filter(Boolean); let ansData=[];
+    if(attemptIds.length){const ans=await supabaseClient.from('answers').select('attempt_id,question_id,is_correct').in('attempt_id',attemptIds);if(ans.error)throw ans.error;ansData=ans.data||[];}
+    const attemptById={}; cloudAttempts.forEach(a=>attemptById[String(a.id)]=a);
+    ansData.forEach(ans=>{const a=attemptById[String(ans.attempt_id)],q=cloudQuestionMap[String(ans.question_id)];if(!a||!q||!q.domain_id)return;const sub=subjectKeyById(a.subject_id);if(!sub)return;const key=String(a.student_id)+'|'+sub+'|'+String(q.domain_id);if(!cloudDomainStats[key])cloudDomainStats[key]={correct:0,total:0,attempts:new Set()};cloudDomainStats[key].total++;if(ans.is_correct)cloudDomainStats[key].correct++;cloudDomainStats[key].attempts.add(String(a.id));});
+    const byId={};
+    cloudStudentProfiles.forEach(p=>{byId[p.id]={id:p.id,name:p.full_name||'طالبة',class:cloudClassNameById(p.class_id)||'-',reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0},domains:{}};});
+    cloudAttempts.forEach(a=>{if(!byId[a.student_id])return;const sub=subjectKeyById(a.subject_id);if(!sub)return;const x=byId[a.student_id][sub];x.attempts++;x.score=Math.max(x.score,Number(a.score)||0);});
+    Object.keys(cloudDomainStats).forEach(key=>{const [studentId,sub,domainId]=key.split('|'),r=byId[studentId];if(!r)return;const d=cloudDomainStats[key],pct=d.total?Math.round(d.correct/d.total*100):0,domain=domainNameById(domainId)||('مجال '+domainId);if(!r.domains[sub])r.domains[sub]={};r.domains[sub][domain]={score:pct,attempts:d.attempts.size,total:d.total,correct:d.correct};});
+    results={}; Object.values(byId).forEach(r=>results[r.name]=r); localStorage.setItem('bf_results',JSON.stringify(results));
+  }catch(e){console.warn('cloud results/domain analysis:',e);}
+}
+
+function renderStudentWeekly(){
+  const box=document.getElementById('studentWeekly')||document.getElementById('studentWeeklyTask');if(!box)return;
+  const allQuestions=getQuestions();
+  const journeys=[{id:'published',title:'الأسئلة المنشورة',subject:'جميع المواد',questionIds:allQuestions.filter(q=>q.is_published===true).map(q=>q.id),active:true}].filter(x=>x.questionIds.length);
+  if(!journeys.length){box.innerHTML='<div class="empty">لا توجد أسئلة منشورة حاليًا.</div>';return;}
+  box.innerHTML=journeys.map(j=>{const qs=j.questionIds.map(id=>allQuestions.find(q=>q.id==id)).filter(Boolean);return '<div class="journey-student-card"><div class="journey-head"><div><strong>🧭 '+j.title+'</strong><div class="muted">'+j.subject+' · '+qs.length+' سؤال</div></div><span class="status active">🟢 نشطة</span></div>'+qs.map((q,i)=>'<div class="journey-q"><div class="muted">السؤال '+(i+1)+' · '+(q.skill||'')+'</div><div>'+ (q.q||'') +'</div>' +(q.o||[]).map((op,k)=>'<label class="option"><input type="radio" name="jq_'+j.id+'_'+q.id+'" value="'+k+'"> '+op+'</label>').join('')+'</div>').join('')+'<button class="primary" onclick="submitJourney(\''+j.id+'\')">إرسال الرحلة</button></div>';}).join('');
+}
+
+function domainRowsForResult(r,subjectFilter){const subs=subjectFilter==='all'?['reading','science','math']:[subjectFilter],out=[];subs.forEach(sub=>{const domains=r?.domains?.[sub]||{};Object.keys(domains).forEach(domain=>out.push({sub,domain,score:domains[domain].score||0,attempts:domains[domain].attempts||0,total:domains[domain].total||0}));});return out;}
+function renderReports(){
+  const out=document.getElementById('reportOutput');if(!out)return;const classCtl=document.getElementById('classReportControls'),studentCtl=document.getElementById('studentReportControls');if(classCtl)classCtl.style.display=reportMode==='class'?'flex':'none';if(studentCtl)studentCtl.style.display=reportMode==='student'?'block':'none';populateReportStudents();
+  if(reportMode==='student'){
+    const name=document.getElementById('reportStudent')?.value,r=results[name];if(!r){out.innerHTML='<div class="empty">اختاري طالبة لعرض التقرير التفصيلي.</div>';return;}const sub=document.getElementById('reportSubject')?.value||'all',rows=domainRowsForResult(r,sub),active=rows.filter(x=>x.attempts>0),subjectData=(sub==='all'?['reading','science','math']:[sub]).map(s=>({label:names[s],value:r[s]?.attempts?Number(r[s].score)||0:0}));
+    out.innerHTML='<h2>تقرير الطالبة: '+escapeHtml(name||'-')+'</h2><div class="stats"><div class="stat">متوسط المجالات<b>'+avg(active.map(x=>x.score))+'%</b></div><div class="stat">عدد المحاولات<b>'+['reading','science','math'].reduce((n,s)=>n+(r[s]?.attempts||0),0)+'</b></div><div class="stat">المجالات المقاسة<b>'+active.length+'</b></div></div>'+chartHTML(subjectData,'الأداء حسب المادة')+'<h3>الأداء حسب المجالات</h3><table><thead><tr><th>المادة</th><th>المجال</th><th>النتيجة</th><th>المحاولات</th></tr></thead><tbody>'+(rows.map(x=>'<tr><td>'+names[x.sub]+'</td><td>'+escapeHtml(x.domain)+'</td><td><b>'+x.score+'%</b></td><td>'+x.attempts+'</td></tr>').join('')||'<tr><td colspan="4">لا توجد بيانات مجالات بعد.</td></tr>')+'</tbody></table>';
+  }else{
+    const cls=document.getElementById('reportClass')?.value||'all',sub=document.getElementById('reportSubject')?.value||'all';const arr=Object.entries(results).map(([student,r])=>({student,r})).filter(x=>cls==='all'||x.r.class===cls),filtered=arr.filter(x=>sub==='all'||(x.r[sub]?.attempts||0)>0);const subjectData=(sub==='all'?['reading','science','math']:[sub]).map(s=>({label:names[s],value:avg(filtered.map(x=>x.r[s]?.attempts?x.r[s].score:0).filter(v=>v>0))}));let allDomains=[];filtered.forEach(x=>domainRowsForResult(x.r,sub).forEach(d=>allDomains.push(d)));const grouped={};allDomains.forEach(d=>{const k=d.sub+'|'+d.domain;if(!grouped[k])grouped[k]={sub:d.sub,domain:d.domain,scores:[]};if(d.attempts)grouped[k].scores.push(d.score);});const domainData=Object.values(grouped).map(d=>({sub:d.sub,domain:d.domain,score:avg(d.scores),count:d.scores.length})).filter(d=>d.count);const weakest=domainData.slice().sort((a,b)=>a.score-b.score).slice(0,5);const domainRows=domainData.map(d=>'<tr><td>'+names[d.sub]+'</td><td>'+escapeHtml(d.domain)+'</td><td><b>'+d.score+'%</b></td><td>'+d.count+'</td></tr>').join('');
+    out.innerHTML='<h2>'+(cls==='all'?'تقرير جميع الفصول':'تقرير الفصل: '+escapeHtml(cls))+'</h2><p style="text-align:center">'+(sub==='all'?'جميع المواد':names[sub])+'</p><div class="stats"><div class="stat">عدد الطالبات<b>'+filtered.length+'</b></div><div class="stat">متوسط المواد<b>'+avg(subjectData.map(x=>x.value))+'%</b></div><div class="stat">المجالات المحللة<b>'+domainData.length+'</b></div></div>'+chartHTML(subjectData,'متوسط الأداء حسب المادة')+'<h3>تحليل المجالات</h3><table><thead><tr><th>المادة</th><th>المجال</th><th>متوسط الأداء</th><th>عدد الطالبات المقاسات</th></tr></thead><tbody>'+(domainRows||'<tr><td colspan="4">لا توجد بيانات مجالات بعد.</td></tr>')+'</tbody></table>'+(weakest.length?chartHTML(weakest.map(d=>({label:d.domain,value:d.score})),'أبرز مجالات الاحتياج للتحسين'):'')+'<h3>ملخص الطالبات</h3><table><thead><tr><th>الطالبة</th><th>الصف</th><th>المتوسط</th></tr></thead><tbody>'+filtered.map(x=>{const vals=(sub==='all'?['reading','science','math']:[sub]).map(s=>x.r[s]?.attempts?x.r[s].score:null).filter(v=>v!==null);return '<tr><td>'+escapeHtml(x.student)+'</td><td>'+escapeHtml(x.r.class||'-')+'</td><td><b>'+avg(vals)+'%</b></td></tr>';}).join('')+'</tbody></table>';
+  }
+}
+
+// إعادة تحميل التحليل السحابي عند فتح لوحة المعلمة
+async function renderTeacher(){applyTeacherSubjectLock();if(cloudReady)await loadCloudAdminResults();const studentCount=cloudReady?cloudStudentProfiles.length:Object.keys(results).length;document.getElementById('tStudents').textContent=studentCount;document.getElementById('tQuestions').textContent=questions.length;let attempts=0,sum=0,count=0;if(cloudReady){cloudAttempts.forEach(a=>{attempts++;sum+=Number(a.score)||0;count++;});}else Object.keys(results).forEach(n=>['reading','science','math'].forEach(s=>{let x=results[n][s];if(x?.attempts){attempts+=x.attempts;sum+=x.score;count++;}}));document.getElementById('tAttempts').textContent=attempts;document.getElementById('tAverage').textContent=(count?Math.round(sum/count):0)+'%';renderResultsTable();applyTeacherSubjectLock();updateSkillOptions();toggleQuestionBuilder();renderBank();if(typeof populateReportStudents==='function')populateReportStudents();}
+
+// ===== لوحة المشرفة التحليلية =====
+function renderDashboardInsights(){
+  const box=document.getElementById('dashboardInsights'); if(!box)return;
+  const profiles=cloudStudentProfiles||[];
+  const subjectFilter=document.getElementById('subjectFilter')?.value||'all';
+  const classFilter=document.getElementById('classFilter')?.value||'all';
+  const selected=profiles.filter(p=>classFilter==='all'||cloudClassNameById(p.class_id)===classFilter);
+  const allowedStudents=new Set(selected.map(p=>p.id));
+  const attempts=(cloudAttempts||[]).filter(a=>allowedStudents.has(a.student_id)&&(subjectFilter==='all'||subjectKeyById(a.subject_id)===subjectFilter));
+  const subjectKeys=subjectFilter==='all'?['reading','science','math']:[subjectFilter];
+  const subjectStats=subjectKeys.map(sub=>{const aa=attempts.filter(a=>subjectKeyById(a.subject_id)===sub);return {sub,n:names[sub],avg:aa.length?Math.round(aa.reduce((x,a)=>x+(Number(a.score)||0),0)/aa.length):0,attempts:aa.length};});
+  const domainAgg={};
+  Object.values(results||{}).forEach(r=>{
+    if(classFilter!=='all' && r.class!==classFilter)return;
+    const subs=subjectFilter==='all'?['reading','science','math']:[subjectFilter];
+    subs.forEach(sub=>Object.entries(r.domains?.[sub]||{}).forEach(([domain,d])=>{
+      if(!d?.attempts)return; const k=sub+'|'+domain;
+      if(!domainAgg[k])domainAgg[k]={sub,domain,scores:[],attempts:0};
+      domainAgg[k].scores.push(Number(d.score)||0); domainAgg[k].attempts+=Number(d.attempts)||0;
+    }));
+  });
+  const domains=Object.values(domainAgg).map(d=>({...d,avg:avg(d.scores)})).sort((a,b)=>a.avg-b.avg);
+  const weak=domains.filter(d=>d.attempts>0).slice(0,3);
+  const strong=domains.filter(d=>d.attempts>0).slice().sort((a,b)=>b.avg-a.avg).slice(0,3);
+  const status=v=>v>=80?'قوة جيدة':v>=60?'يحتاج متابعة':'أولوية تحسين';
+  box.innerHTML=`<h3 style="margin-top:0">🧭 الملخص التحليلي السريع</h3>
+    <div class="stats" style="margin-top:10px">
+      <div class="stat">الطالبات في النطاق<b>${selected.length}</b></div>
+      <div class="stat">المحاولات<b>${attempts.length}</b></div>
+      <div class="stat">المجالات المقاسة<b>${domains.length}</b></div>
+      <div class="stat">متوسط الأداء<b>${avg(subjectStats.filter(x=>x.attempts).map(x=>x.avg))}%</b></div>
+    </div>
+    <div class="chart-wrap"><h3>أداء المواد</h3><div class="chart-bars">${subjectStats.map(x=>`<div class="chart-col"><div class="chart-bar" style="height:${Math.max(4,x.avg*1.7)}px"><span>${x.avg}%</span></div><div class="chart-label">${x.n}<br><small>${x.attempts} محاولة</small></div></div>`).join('')}</div></div>
+    <div class="form-grid">
+      <div class="panel" style="margin:0;border:1px solid #f0dfe9"><h3>🎯 أولويات التحسين</h3>${weak.length?weak.map(d=>`<div class="notice"><b>${names[d.sub]} — ${escapeHtml(d.domain)}</b><br><span>${d.avg}% · ${status(d.avg)}</span></div>`).join(''):'<div class="empty">ستظهر الأولويات بعد تنفيذ التدريبات.</div>'}</div>
+      <div class="panel" style="margin:0;border:1px solid #e3eee6"><h3>🌟 أبرز مجالات القوة</h3>${strong.length?strong.map(d=>`<div class="notice"><b>${names[d.sub]} — ${escapeHtml(d.domain)}</b><br><span>${d.avg}%</span></div>`).join(''):'<div class="empty">لا توجد بيانات مجالات كافية بعد.</div>'}</div>
+    </div>`;
+}
+
+const _renderResultsTableBase=renderResultsTable;
+renderResultsTable=function(){
+  _renderResultsTableBase();
+  renderDashboardInsights();
+};
+
+function renderSmartAnalysis(){
+ const box=document.getElementById('smartAnalysisContent'); if(!box)return;
+ const cf=document.getElementById('classFilter')?.value||'all', sf=document.getElementById('subjectFilter')?.value||'all';
+ const domains={reading:['استيعاب المقروء','دلالات الألفاظ'],science:['علوم الحياة','علم الأرض والفلك','العلوم الفيزيائية والكيميائية'],math:['الهندسة والقياس','الأعداد والعمليات عليها','البيانات والاحتمالات','الجبر']};
+ const subs=sf==='all'?['reading','science','math']:[sf];
+ const students=Object.keys(results).filter(n=>cf==='all'||results[n]?.class===cf); let rows=[];
+ subs.forEach(sub=>(domains[sub]||[]).forEach(d=>{let v=students.map(n=>Number(results[n]?.domains?.[sub]?.[d]?.score)).filter(Number.isFinite);if(v.length)rows.push({sub,d,avg:Math.round(v.reduce((a,b)=>a+b,0)/v.length)});}));
+ if(!rows.length){box.innerHTML='<div class="empty">لا تتوفر نتائج مجالية كافية لإظهار التحليل بعد.</div>';return;}
+ rows.sort((a,b)=>a.avg-b.avg); const priority=rows.slice(0,5), support=[];
+ students.forEach(n=>subs.forEach(sub=>(domains[sub]||[]).forEach(d=>{let score=Number(results[n]?.domains?.[sub]?.[d]?.score);if(Number.isFinite(score)&&score<60)support.push({student:n,className:results[n]?.class||'-',sub,d,score});})));
+ support.sort((a,b)=>a.score-b.score);
+ const rec=x=>x.avg<50?'دعم علاجي وإعادة قياس':x.avg<60?'تدريب علاجي ثم إعادة قياس':'تعزيز وممارسة';
+ box.innerHTML=`<div class="stats"><div class="stat">المجالات المحللة<b>${rows.length}</b></div><div class="stat">مجالات الأولوية<b>${priority.filter(x=>x.avg<60).length}</b></div><div class="stat">الطالبات المحتاجات للدعم<b>${new Set(support.map(x=>x.student)).size}</b></div></div><h4>🎯 المجالات ذات الأولوية</h4><table><thead><tr><th>المادة</th><th>المجال</th><th>المتوسط</th><th>التوصية</th></tr></thead><tbody>${priority.map(x=>`<tr><td>${names[x.sub]}</td><td>${x.d}</td><td><b>${x.avg}%</b></td><td>${rec(x)}</td></tr>`).join('')}</tbody></table><h4 style="margin-top:25px">👩‍🎓 الطالبات المحتاجات للدعم</h4>${support.length?`<table><thead><tr><th>الطالبة</th><th>الفصل</th><th>المادة</th><th>المجال</th><th>النتيجة</th></tr></thead><tbody>${support.map(x=>`<tr><td><b>${escapeHtml(x.student)}</b></td><td>${escapeHtml(x.className)}</td><td>${names[x.sub]}</td><td>${escapeHtml(x.d)}</td><td><b>${x.score}%</b></td></tr>`).join('')}</tbody></table>`:'<div class="notice">🌟 لا توجد حاليًا نتائج أقل من 60% ضمن التصفية المحددة.</div>'}<div class="notice"><b>معيار الدعم:</b> أقل من 60% في المجال.</div>`;
+}
+function printDashboardAnalysis(){renderSmartAnalysis();const box=document.getElementById('smartAnalysisPanel');if(!box)return;const w=window.open('','_blank');w.document.write(`<html dir="rtl"><head><meta charset="utf-8"><title>تحليل بوصلة الفهم</title><style>body{font-family:Arial;padding:30px;color:#222}h2,h3,h4{text-align:center;color:#5d479c}table{width:100%;border-collapse:collapse;margin:15px 0}th,td{border:1px solid #ccc;padding:9px;text-align:right}th{background:#f2edf9}.panel{border:1px solid #ddd;padding:18px;border-radius:12px}.stats{display:flex;gap:10px;justify-content:center}.stat{border:1px solid #ddd;padding:10px;border-radius:10px;text-align:center}.stat b{display:block;font-size:20px;color:#5d479c}.no-print,button{display:none!important}</style></head><body><h2>🧭 بوصلة الفهم</h2><h3>التحليل الذكي لأداء الطالبات</h3><p style="text-align:center">تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</p>${box.innerHTML}</body></html>`);w.document.close();w.focus();setTimeout(()=>w.print(),300)}
+const _oldRenderResultsTable2=renderResultsTable; renderResultsTable=function(){_oldRenderResultsTable2();renderSmartAnalysis();};
+
+
+// ===== التقرير الرسمي المدرسي =====
+function printOfficialReport(){
+  const className=document.getElementById('reportClass')?.value||'all';
+  const subject=document.getElementById('reportSubject')?.value||'all';
+  const mode=window.reportMode||'class';
+  const student=document.getElementById('reportStudent')?.value||'';
+  const classLabel=className==='all'?'جميع الفصول':className;
+  const subjectLabel=subject==='all'?'جميع المواد':(names[subject]||subject);
+  const today=new Date().toLocaleDateString('ar-SA');
+  renderSmartAnalysis();
+  const report=document.getElementById('reportOutput');
+  const analysis=document.getElementById('smartAnalysisContent');
+  if(!report){alert('لا توجد بيانات كافية لإصدار التقرير.');return;}
+  const title=mode==='student'?'تقرير أداء طالبة':'تقرير متابعة الأداء والتحليل';
+  const scope=mode==='student'?`الطالبة: ${escapeHtml(student||'-')}`:`الفصل: ${escapeHtml(classLabel)} — المادة: ${escapeHtml(subjectLabel)}`;
+  const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${title} - بوصلة الفهم</title>
+  <style>
+  @page{size:A4;margin:16mm}body{font-family:Arial,'Tahoma',sans-serif;color:#222;line-height:1.8;margin:0}
+  .header{border:2px solid #7657c8;border-radius:14px;padding:18px;text-align:center;margin-bottom:18px}
+  .header h1{margin:0;color:#5d479c;font-size:24px}.header h2{margin:5px 0;font-size:18px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;text-align:right}
+  .meta div{border:1px solid #ddd;padding:8px;border-radius:8px}.section{margin:18px 0;border:1px solid #ddd;border-radius:12px;padding:14px;break-inside:avoid}
+  .section h3{color:#5d479c;margin-top:0;border-bottom:1px solid #eee;padding-bottom:7px}
+  table{width:100%;border-collapse:collapse;margin:10px 0}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#f2edf9;color:#4f3b86}
+  .notice{background:#f7f3fc;border-right:4px solid #7657c8;padding:10px;margin:10px 0;border-radius:7px}
+  .footer{margin-top:25px;border-top:1px solid #ddd;padding-top:10px;text-align:center;color:#777;font-size:12px}
+  button,.no-print{display:none!important}.panel{box-shadow:none!important}
+  </style></head><body>
+  <div class="header"><h1>🧭 بوصلة الفهم</h1><h2>تقرير متابعة الأداء والتحليل التعليمي</h2>
+  <div class="meta"><div><b>المدرسة:</b> متوسطة 178</div><div><b>تاريخ التقرير:</b> ${today}</div><div><b>نطاق التقرير:</b> ${scope}</div><div><b>نوع التقرير:</b> ${mode==='student'?'تقرير طالبة':'تقرير فصل / متابعة مدرسية'}</div></div></div>
+  <div class="section"><h3>📊 ملخص الأداء</h3>${report.innerHTML}</div>
+  <div class="section"><h3>🧠 التحليل الذكي والتوصيات</h3>${analysis?analysis.innerHTML:'<p>لا يتوفر تحليل مجالي بعد.</p>'}</div>
+  <div class="section"><h3>📌 ملاحظات المتابعة</h3><div class="notice">تم تحديد مجالات الاحتياج وفق نتائج التدريبات المسجلة في منصة بوصلة الفهم، ويُوصى بتنفيذ تدريب علاجي وإعادة القياس للطالبات اللاتي تقل نتائجهن عن معيار الدعم المحدد في المنصة.</div><div style="height:80px"></div></div>
+  <div class="footer">بوصلة الفهم — تقرير تعليمي للاستخدام المدرسي | متوسطة 178</div>
+  </body></html>`;
+  const w=window.open('','_blank');
+  if(!w){alert('يرجى السماح بالنوافذ المنبثقة لطباعة التقرير.');return;}
+  w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),350);
+}
+
+
+function renderSupportPlan(){
+  const box=document.getElementById('supportPlanOutput'); if(!box)return;
+  const domains=domainList(); const cf=document.getElementById('classFilter')?.value||'all';
+  let rows=[];
+  Object.keys(results).forEach(student=>{
+    const r=results[student]; if(cf!=='all'&&r.class!==cf)return;
+    ['reading','science','math'].forEach(sub=>(domains[sub]||[]).forEach(domain=>{
+      const score=getStudentDomainScore(student,sub,domain);
+      if(Number.isFinite(score)&&score<60) rows.push({student,className:r.class||'-',sub,domain,score,
+        action:score<50?'تدريب علاجي مكثف ثم إعادة قياس':'تدريب علاجي وممارسة إضافية ثم إعادة قياس'});
+    }));
+  });
+  rows.sort((a,b)=>a.score-b.score);
+  if(!rows.length){box.innerHTML='<div class="notice">🌟 لا توجد حالات تحتاج إلى دعم وفق معيار 60% ضمن التصفية الحالية.</div>';return;}
+  box.innerHTML=`<div class="stats"><div class="stat">حالات الدعم<b>${rows.length}</b></div><div class="stat">طالبات الدعم<b>${[...new Set(rows.map(x=>x.student))].length}</b></div></div>
+  <table><thead><tr><th>الطالبة</th><th>الفصل</th><th>المادة</th><th>مجال الاحتياج</th><th>النتيجة</th><th>الإجراء المقترح</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${escapeHtml(x.student)}</b></td><td>${escapeHtml(x.className)}</td><td>${names[x.sub]}</td><td>${escapeHtml(x.domain)}</td><td><b>${x.score}%</b></td><td>${x.action}</td></tr>`).join('')}</tbody></table>`;
+}
+function renderRemeasurement(){
+  const box=document.getElementById('remeasurementOutput'); if(!box)return;
+  const cf=document.getElementById('classFilter')?.value||'all';
+  let rows=[];
+  Object.keys(results).forEach(student=>{
+    const r=results[student]; if(cf!=='all'&&r.class!==cf)return;
+    ['reading','science','math'].forEach(sub=>{
+      const hs=r.domainHistory?.[sub]||{};
+      Object.keys(hs).forEach(domain=>{
+        const arr=Array.isArray(hs[domain])?hs[domain]:[];
+        if(arr.length<2)return;
+        const before=Number(arr[arr.length-2].score), after=Number(arr[arr.length-1].score);
+        if(!Number.isFinite(before)||!Number.isFinite(after))return;
+        rows.push({student,className:r.class||'-',sub,domain,before,after,change:after-before});
+      });
+    });
+  });
+  rows.sort((a,b)=>b.change-a.change);
+  if(!rows.length){box.innerHTML='<div class="notice">📈 ستظهر نتائج إعادة القياس هنا بعد تنفيذ تدريب علاجي ثم حل تدريب لاحق في المجال نفسه.</div>';return;}
+  const improved=rows.filter(x=>x.change>0).length, stable=rows.filter(x=>x.change===0).length, declined=rows.filter(x=>x.change<0).length;
+  box.innerHTML=`<div class="section"><h3>📈 مقارنة قبل الدعم وبعده</h3><div class="stats"><div class="stat">حالات تحسن<b>${improved}</b></div><div class="stat">ثبات<b>${stable}</b></div><div class="stat">تراجع<b>${declined}</b></div></div><table><thead><tr><th>الطالبة</th><th>الفصل</th><th>المادة</th><th>المجال</th><th>قبل الدعم</th><th>بعد الدعم</th><th>مقدار التغير</th><th>الحالة</th></tr></thead><tbody>${rows.map(x=>{const status=x.change>0?'تحسن':x.change<0?'يحتاج متابعة':'ثابت';return `<tr><td><b>${escapeHtml(x.student)}</b></td><td>${escapeHtml(x.className)}</td><td>${names[x.sub]}</td><td>${escapeHtml(x.domain)}</td><td>${x.before}%</td><td><b>${x.after}%</b></td><td><b>${x.change>0?'+':''}${x.change}%</b></td><td>${status}</td></tr>`}).join('')}</tbody></table><div class="notice"><b>قراءة المؤشر:</b> تتم مقارنة آخر نتيجتين مسجلتين في المجال نفسه؛ ويُعد ارتفاع النتيجة مؤشرًا على التحسن بعد الدعم.</div></div>`;
+}
+
+function printSupportPlan(){
+  renderSupportPlan(); const el=document.getElementById('supportPlanOutput'); if(!el)return;
+  const w=window.open('','_blank');
+  w.document.write(`<html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>خطة الدعم العلاجي - بوصلة الفهم</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#222}h1,h2,h3{text-align:center;color:#5d479c}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{border:1px solid #bbb;padding:9px;text-align:right}th{background:#f2edf9}.header{text-align:center;border-bottom:2px solid #7657c8;padding-bottom:15px}.note{margin-top:20px;padding:12px;background:#f5f0ff;border-radius:10px}@media print{button{display:none}}</style></head><body><div class="header"><h1>🧭 بوصلة الفهم</h1><h2>خطة الدعم العلاجي</h2><p>متوسطة 178 — تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</p></div>${el.innerHTML}<div class="note"><b>آلية المتابعة:</b> تنفيذ التدريب العلاجي، ثم إعادة قياس المجال، وتوثيق التحسن في النتائج اللاحقة.</div></body></html>`); w.document.close();w.focus();setTimeout(()=>w.print(),300);
+}
+</script>
