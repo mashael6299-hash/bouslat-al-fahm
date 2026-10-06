@@ -814,7 +814,21 @@ function renderReports(){
     <table><thead><tr><th>الطالبة</th>${cls==='all'?'<th>الفصل</th>':''}<th>المادة</th><th>النتيجة</th></tr></thead><tbody>${rr.map(r=>`<tr><td>${r.student}</td>${cls==='all'?`<td>${r.class||'-'}</td>`:''}<td>${names[r.subject]||r.subject}</td><td>${scorePct(r)}%</td></tr>`).join('')||`<tr><td colspan="${cls==='all'?4:3}">لا توجد نتائج.</td></tr>`}</tbody></table>`;
   }
 }
-function teacherTab(id,btn){document.querySelectorAll('.teacherTab').forEach(x=>x.style.display='none');document.getElementById(id).style.display='block';document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');if(id==='bank')renderBank();if(id==='weekly'){renderWeeklyBank();renderPublishedTasks()}if(id==='support'){renderSupportPlan()}if(id==='reports'){populateReportStudents();renderReports()}}
+function teacherTab(id,btn){
+  document.querySelectorAll('.teacherTab').forEach(x=>x.style.display='none');
+  document.getElementById(id).style.display='block';
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
+  btn.classList.add('active');
+  if(id==='create'){
+    applyTeacherSubjectLock();
+    updateSkillOptions();
+    toggleQuestionBuilder();
+  }
+  if(id==='bank')renderBank();
+  if(id==='weekly'){renderWeeklyBank();renderPublishedTasks()}
+  if(id==='support'){renderSupportPlan()}
+  if(id==='reports'){populateReportStudents();renderReports()}
+}
 function updateSkillOptions(){
 let sub=document.getElementById('newSubject').value;
 let skills={
@@ -925,14 +939,27 @@ w.document.close();w.focus();setTimeout(()=>w.print(),300);
 
 let readingQuestionCount=0;
 function toggleQuestionBuilder(){
-let sub=document.getElementById('newSubject').value;
-let type=document.getElementById('trainingType')?.value||'independent';
-let isReading=sub==='reading';
-document.getElementById('trainingTypeWrap').style.display=isReading?'block':'none';
-document.getElementById('readingCreator').style.display=(isReading&&type==='passage')?'block':'none';
-document.getElementById('standardCreator').style.display=(isReading&&type==='passage')?'none':'block';
-updateSkillOptions();
+  const subjectEl=document.getElementById('newSubject');
+  const typeEl=document.getElementById('trainingType');
+  const readingCreator=document.getElementById('readingCreator');
+  const standardCreator=document.getElementById('standardCreator');
+  const trainingWrap=document.getElementById('trainingTypeWrap');
+  if(!subjectEl||!readingCreator||!standardCreator)return;
+
+  const sub=subjectEl.value;
+  const isReading=sub==='reading';
+
+  // القطعة والأسئلة متاحة للقراءة فقط.
+  // عند اختيار العلوم أو الرياضيات نفرض نوع التدريب المستقل ونمنع ظهور محرر القطعة.
+  if(!isReading && typeEl) typeEl.value='independent';
+  const type=isReading ? (typeEl?.value||'independent') : 'independent';
+
+  if(trainingWrap) trainingWrap.style.display=isReading?'block':'none';
+  readingCreator.style.display=(isReading&&type==='passage')?'block':'none';
+  standardCreator.style.display=(!isReading || type!=='passage')?'block':'none';
+  updateSkillOptions();
 }
+
 function addReadingQuestion(){
 readingQuestionCount++;
 let id=readingQuestionCount;
