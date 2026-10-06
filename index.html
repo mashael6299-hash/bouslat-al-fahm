@@ -453,8 +453,10 @@ async function loadCloudQuestions(){
 function mapCloudQuestion(x){
   const subjectRow=cloudSubjects.find(s=>String(s.id)===String(x.subject_id));
   const subject=subjectRow?subjectKeyFromRow(subjectRow):(x.subject||x.subject_key||x.subject_code||x.subject_id);
-  const options=x.options||x.o||[];
-  return {id:x.id,subject,subject_id:x.subject_id||null,skill:x.skill||x.domain||x.domain_name||domainNameById(x.domain_id)||x.domain_id,q:x.question_text||x.question||x.q,o:Array.isArray(options)?options:[],a:Number(x.correct_index ?? x.correct_answer ?? x.a ?? 0),difficulty:x.difficulty||'متوسط',trainingType:x.training_type||x.trainingType||'independent',passage:x.passage||null,created_by:x.created_by,is_published:x.is_published??x.published??false};
+  const options=Array.isArray(x.options)?x.options:(Array.isArray(x.o)?x.o:[x.option_a,x.option_b,x.option_c,x.option_d].map(v=>String(v??'')));
+  const letterMap={A:0,B:1,C:2,D:3};
+  const answerIndex=Number.isInteger(Number(x.correct_index))?Number(x.correct_index):(letterMap[String(x.correct_answer||'').trim().toUpperCase()]??0);
+  return {id:x.id,subject,subject_id:x.subject_id||null,skill:x.skill||x.domain||x.domain_name||domainNameById(x.domain_id)||x.domain_id,q:x.question_text||x.question||x.q,o:options,a:answerIndex,difficulty:x.difficulty||'متوسط',trainingType:x.training_type||x.trainingType||'independent',passage:x.passage||null,created_by:x.created_by,is_published:x.is_published??x.published??false};
 }
 function currentTeacherSubject(){
   if(cloudProfile?.role!=='teacher') return null;
@@ -500,7 +502,7 @@ async function insertCloudQuestion(q){
     option_c:optionTexts[2]||'',
     option_d:optionTexts[3]||'',
     options:optionTexts,
-    correct_answer:optionTexts[correctIndex]||'',
+    correct_answer:['A','B','C','D'][correctIndex],
     correct_index:correctIndex,
     difficulty:q.difficulty || 'متوسط',
     created_by:cloudProfile.id,
