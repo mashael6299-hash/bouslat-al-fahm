@@ -676,14 +676,18 @@ async function publishWeeklyTask(){
   const subject=document.getElementById('weeklySubject')?.value||'all';
   if(subject==='all'){alert('اختاري مادة واحدة أولًا.');return;}
   if(ids.length<1){alert('اختاري سؤالًا واحدًا أو أكثر أولًا.');return;}
-  const ok=await setQuestionsPublished(ids,true);
-  if(!ok){alert('تعذر نشر الأسئلة.');return;}
-  document.querySelectorAll('#weeklyQuestionBank input[type="checkbox"]').forEach(x=>x.checked=false);
-  renderWeeklyBank();
-  renderPublishedTasks();
-  renderStudentWeekly();
-  renderStats();
-  alert('تم نشر الأسئلة للطالبات بنجاح.');
+  try{
+    await publishSelectedTask(ids,subject);
+    document.querySelectorAll('#weeklyQuestionBank input[type="checkbox"]').forEach(x=>x.checked=false);
+    await loadCloudQuestions();
+    renderWeeklyBank();
+    renderPublishedTasks();
+    if(typeof renderStats==='function') renderStats();
+    alert('✅ تم نشر التدريب للطالبات بنجاح، وتم إيقاف التدريب السابق في المادة.');
+  }catch(e){
+    console.error('publish task:',e);
+    alert('تعذر نشر التدريب: '+(e?.message||'خطأ غير معروف'));
+  }
 }
 function renderPublishedTasks(){
   const box=document.getElementById('publishedTasks');
@@ -1272,6 +1276,10 @@ async function findCompletedAttemptForSet(subjectRow,questionIds){
 async function startQuiz(sub){
   currentSubject=sub;
   try{
+    const sessionOk=await ensureStudentSession();
+    if(!sessionOk){alert('جلسة الطالبة غير فعالة. أعيدي الدخول إلى الرحلة ثم حاولي مرة أخرى.');return;}
+    await loadCloudReferenceData();
+
     const {subjectRow,published}=await getPublishedStudentPool(sub);
     if(!published.length){alert('لا توجد أسئلة منشورة في هذا القسم حاليًا.');return;}
     const already=await findCompletedAttemptForSet(subjectRow,published.map(q=>q.id));
@@ -1376,6 +1384,24 @@ function renderReports(){
     const cls=document.getElementById('reportClass')?.value||'all',sub=document.getElementById('reportSubject')?.value||'all';const arr=Object.entries(results).map(([student,r])=>({student,r})).filter(x=>cls==='all'||x.r.class===cls),filtered=arr.filter(x=>sub==='all'||(x.r[sub]?.attempts||0)>0);const subjectData=(sub==='all'?['reading','science','math']:[sub]).map(s=>({label:names[s],value:avg(filtered.map(x=>x.r[s]?.attempts?x.r[s].score:0).filter(v=>v>0))}));let allDomains=[];filtered.forEach(x=>domainRowsForResult(x.r,sub).forEach(d=>allDomains.push(d)));const grouped={};allDomains.forEach(d=>{const k=d.sub+'|'+d.domain;if(!grouped[k])grouped[k]={sub:d.sub,domain:d.domain,scores:[]};if(d.attempts)grouped[k].scores.push(d.score);});const domainData=Object.values(grouped).map(d=>({sub:d.sub,domain:d.domain,score:avg(d.scores),count:d.scores.length})).filter(d=>d.count);const weakest=domainData.slice().sort((a,b)=>a.score-b.score).slice(0,5);const domainRows=domainData.map(d=>'<tr><td>'+names[d.sub]+'</td><td>'+escapeHtml(d.domain)+'</td><td><b>'+d.score+'%</b></td><td>'+d.count+'</td></tr>').join('');
     out.innerHTML='<h2>'+(cls==='all'?'تقرير جميع الفصول':'تقرير الفصل: '+escapeHtml(cls))+'</h2><p style="text-align:center">'+(sub==='all'?'جميع المواد':names[sub])+'</p><div class="stats"><div class="stat">عدد الطالبات<b>'+filtered.length+'</b></div><div class="stat">متوسط المواد<b>'+avg(subjectData.map(x=>x.value))+'%</b></div><div class="stat">المجالات المحللة<b>'+domainData.length+'</b></div></div>'+chartHTML(subjectData,'متوسط الأداء حسب المادة')+'<h3>تحليل المجالات</h3><table><thead><tr><th>المادة</th><th>المجال</th><th>متوسط الأداء</th><th>عدد الطالبات المقاسات</th></tr></thead><tbody>'+(domainRows||'<tr><td colspan="4">لا توجد بيانات مجالات بعد.</td></tr>')+'</tbody></table>'+(weakest.length?chartHTML(weakest.map(d=>({label:d.domain,value:d.score})),'أبرز مجالات الاحتياج للتحسين'):'')+'<h3>ملخص الطالبات</h3><table><thead><tr><th>الطالبة</th><th>الصف</th><th>المتوسط</th></tr></thead><tbody>'+filtered.map(x=>{const vals=(sub==='all'?['reading','science','math']:[sub]).map(s=>x.r[s]?.attempts?x.r[s].score:null).filter(v=>v!==null);return '<tr><td>'+escapeHtml(x.student)+'</td><td>'+escapeHtml(x.r.class||'-')+'</td><td><b>'+avg(vals)+'%</b></td></tr>';}).join('')+'</tbody></table>';
   }
+}
+
+function renderStats(){
+  try{
+    const qs=questions||[];
+    const studentCount=cloudReady&&Array.isArray(cloudStudentProfiles)?cloudStudentProfiles.length:Object.keys(results||{}).length;
+    let attempts=0,sum=0,count=0;
+    if(cloudReady&&Array.isArray(cloudAttempts)){
+      cloudAttempts.forEach(a=>{attempts++;sum+=pctFromAttempt(a);count++;});
+    }else{
+      Object.values(results||{}).forEach(r=>['reading','science','math'].forEach(sub=>{const x=r?.[sub];if(x?.attempts){attempts+=Number(x.attempts)||0;sum+=Number(x.score)||0;count++;}}));
+    }
+    const el=(id)=>document.getElementById(id);
+    if(el('tStudents')) el('tStudents').textContent=studentCount;
+    if(el('tQuestions')) el('tQuestions').textContent=qs.length;
+    if(el('tAttempts')) el('tAttempts').textContent=attempts;
+    if(el('tAverage')) el('tAverage').textContent=(count?Math.round(sum/count):0)+'%';
+  }catch(e){console.warn('renderStats:',e)}
 }
 
 // إعادة تحميل التحليل السحابي عند فتح لوحة المعلمة
@@ -1514,8 +1540,28 @@ function pctFromAttempt(a){
   return total>0 ? Math.round(score/total*100) : 0;
 }
 
+async function ensureStudentSession(){
+  if(studentAuthUser?.id) return true;
+  try{
+    let {data:{session}}=await withTimeout(supabaseClient.auth.getSession(),8000);
+    if(!session || !session.user) return false;
+    if(!session.user.is_anonymous) return false;
+    const {data:profile,error}=await withTimeout(supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',session.user.id).maybeSingle(),8000);
+    if(error || !profile || profile.role!=='student') return false;
+    studentAuthUser=session.user;
+    studentCloudProfile=profile;
+    const cls=cloudClassNameById(profile.class_id);
+    student={name:profile.full_name||student?.name||'',class:cls||student?.class||'غير محدد',id:profile.id};
+    localStorage.setItem('bf_student',JSON.stringify(student));
+    return true;
+  }catch(e){
+    console.warn('ensureStudentSession:',e);
+    return false;
+  }
+}
+
 async function getActiveTaskForSubject(subjectKey){
-  if(!cloudReady) throw new Error('جلسة المستخدم السحابية غير فعالة.');
+  if(!cloudReady && !studentAuthUser) throw new Error('جلسة المستخدم السحابية غير فعالة.');
   if(!cloudSubjects.length) await loadCloudReferenceData();
   const sr=subjectRowByKey(subjectKey);
   if(!sr) throw new Error('تعذر تحديد المادة في قاعدة البيانات.');
