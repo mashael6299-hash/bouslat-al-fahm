@@ -135,7 +135,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px;border-bottom:1px s
 </div>
 </div>
 <div id="dashboardInsights" class="panel" style="margin-top:20px;border:1px solid #e8def5;background:#fcfaff"></div>
-<table><thead><tr><th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th></tr></thead><tbody id="resultsTable"></tbody></table><div id="smartAnalysisPanel" style="margin-top:25px"><div class="panel" style="border:1px solid #eadff5;box-shadow:none"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h3>🧠 التحليل الذكي حسب المجالات</h3><button class="green no-print" onclick="printDashboardAnalysis()">🖨️ طباعة التحليل</button></div><div id="smartAnalysisContent"><div class="empty">سيظهر التحليل بعد توفر نتائج الطالبات.</div></div></div></div></div>
+<table><thead><tr><th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th></tr></thead><tbody id="resultsTable"></tbody></table><div id="attemptDetailsPanel" class="panel" style="margin-top:22px;border:1px solid #eadff5;box-shadow:none;display:none"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">📝 تفاصيل حل الطالبة</h3><button class="secondary no-print" onclick="closeAttemptDetails()">إغلاق</button></div><div id="attemptDetailsOutput" style="margin-top:15px"></div></div><div id="smartAnalysisPanel" style="margin-top:25px"><div class="panel" style="border:1px solid #eadff5;box-shadow:none"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h3>🧠 التحليل الذكي حسب المجالات</h3><button class="green no-print" onclick="printDashboardAnalysis()">🖨️ طباعة التحليل</button></div><div id="smartAnalysisContent"><div class="empty">سيظهر التحليل بعد توفر نتائج الطالبات.</div></div></div></div></div>
 <div id="create" class="teacherTab panel" style="display:none">
 <h3>✏️ إنشاء تدريب جديد</h3>
 
@@ -379,15 +379,27 @@ async function loadStudentCloudResults(){
 }
 function subjectKeyFromId(id){const row=cloudSubjects.find(s=>String(s.id)===String(id));return row?subjectKeyFromRow(row):null}
 async function saveStudentAttemptToCloud(score,total,subject,domainScores){
-  if(!studentAuthUser)return;
-  const subjectRow=subjectRowByKey(subject);
-  const payload={student_id:studentAuthUser.id,subject_id:subjectRow?.id||null,score,total_questions:total};
-  const {data,error}=await supabaseClient.from('attempts').insert(payload).select('*').single();
-  if(error){console.warn('save attempt:',error);return}
-  if(window.currentAnswerRows?.length && data?.id){
-    const rows=window.currentAnswerRows.map(x=>({attempt_id:data.id,question_id:x.question_id,selected_index:x.selected_index,is_correct:x.is_correct}));
-    const ar=await supabaseClient.from('answers').insert(rows);
-    if(ar.error)console.warn('save answers:',ar.error);
+  if(!studentAuthUser)return {ok:false,error:'جلسة الطالبة غير فعالة.'};
+  try{
+    const subjectRow=subjectRowByKey(subject);
+    if(!subjectRow)return {ok:false,error:'تعذر تحديد المادة في قاعدة البيانات.'};
+    const questionIds=Array.from(new Set((window.currentAnswerRows||[]).map(x=>String(x.question_id)))).sort();
+    const payload={student_id:studentAuthUser.id,subject_id:subjectRow.id,score,total_questions:total};
+    const {data,error}=await supabaseClient.from('attempts').insert(payload).select('*').single();
+    if(error){console.warn('save attempt:',error);return {ok:false,error:error.message||'تعذر حفظ المحاولة.'};}
+    if(window.currentAnswerRows?.length && data?.id){
+      const rows=window.currentAnswerRows.map(x=>({attempt_id:data.id,question_id:x.question_id,selected_index:x.selected_index,is_correct:x.is_correct}));
+      const ar=await supabaseClient.from('answers').insert(rows);
+      if(ar.error){
+        console.warn('save answers:',ar.error);
+        try{ await supabaseClient.from('attempts').delete().eq('id',data.id).eq('student_id',studentAuthUser.id); }catch(cleanErr){ console.warn('rollback attempt:',cleanErr); }
+        return {ok:false,error:ar.error.message||'تعذر حفظ تفاصيل الإجابات.'};
+      }
+    }
+    return {ok:true,attemptId:data.id,questionIds};
+  }catch(e){
+    console.warn('saveStudentAttemptToCloud:',e);
+    return {ok:false,error:e?.message||'تعذر حفظ النتيجة.'};
   }
 }
 async function logoutStudent(){
@@ -442,12 +454,7 @@ async function logoutTeacher(){
 async function loadCloudQuestions(){
   try{
     let query=supabaseClient.from('questions').select('*').order('created_at',{ascending:false});
-    if(cloudProfile?.role==='teacher'){
-      query=query.eq('created_by',cloudProfile.id);
-    }else if(studentAuthUser){
-      // الطالبات لا يحتجن إلا الأسئلة المنشورة، ونحمّلها من الخادم مباشرة لتفادي بقاء بنك محلي قديم.
-      query=query.eq('is_published',true);
-    }
+    if(cloudProfile?.role==='teacher') query=query.eq('created_by',cloudProfile.id);
     const {data,error}=await query;
     if(error){console.warn('questions query:',error);return false}
     questions=(Array.isArray(data)?data:[]).map(mapCloudQuestion);
@@ -583,37 +590,37 @@ function escapeHtml(text){
 return text.replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]});
 }
 function answer(i,btn){let q=currentQuiz[currentIndex];window.currentAnswerRows.push({question_id:q.id,selected_index:i,is_correct:i===q.a});if(!window.quizDomainScores)window.quizDomainScores={};if(!window.quizDomainScores[q.skill])window.quizDomainScores[q.skill]={correct:0,total:0};window.quizDomainScores[q.skill].total++;document.querySelectorAll('.option').forEach(b=>b.disabled=true);if(i===q.a){btn.classList.add('correct');currentScore++;window.quizDomainScores[q.skill].correct++}else{btn.classList.add('wrong');document.querySelectorAll('.option')[q.a].classList.add('correct')}setTimeout(()=>{currentIndex++;renderQuestion()},650)}
-function finishQuiz(){
-let score=Math.round(currentScore/currentQuiz.length*100),r=results[student.name]||{class:student.class};
-let old=r[currentSubject]||{score:0,attempts:0};
-r[currentSubject]={score:Math.max(old.score,score),attempts:(old.attempts||0)+1,last:score};
-if(!r.domains)r.domains={};
-if(!r.domains[currentSubject])r.domains[currentSubject]={};
-let domainGroups={};
-currentQuiz.forEach((q,idx)=>{
-if(!domainGroups[q.skill])domainGroups[q.skill]={correct:0,total:0};
-domainGroups[q.skill].total++;
-if(idx<currentQuiz.length && idx<currentQuiz.length){
-}
-});
-currentQuiz.forEach((q,idx)=>{
-// currentScore is total only; calculate domain performance from the stored answer map when available
-});
-if(window.quizDomainScores){
-Object.keys(window.quizDomainScores).forEach(domain=>{
-let d=window.quizDomainScores[domain], pct=d.total?Math.round(d.correct/d.total*100):0;
-let oldD=r.domains[currentSubject][domain]||{score:0,attempts:0};
-r.domains[currentSubject][domain]={score:Math.max(oldD.score,pct),attempts:oldD.attempts+1,last:pct};
-if(!r.domainHistory)r.domainHistory={};
-if(!r.domainHistory[currentSubject])r.domainHistory[currentSubject]={};
-if(!r.domainHistory[currentSubject][domain])r.domainHistory[currentSubject][domain]=[];
-r.domainHistory[currentSubject][domain].push({score:pct,date:new Date().toISOString()});
-});
-}
-results[student.name]=r;localStorage.setItem('bf_results',JSON.stringify(results));
-saveStudentAttemptToCloud(score,currentQuiz.length,currentSubject,window.quizDomainScores);
-document.getElementById('quizHint').textContent='أحسنتِ! تم حفظ نتيجتك في رحلتك.';
-document.getElementById('questionArea').innerHTML=`<div style="text-align:center;padding:35px"><div style="font-size:60px">🎉</div><h2>نتيجتك ${score}%</h2><p>تم حفظ النتيجة ويمكن للمعلمة الاطلاع عليها من لوحة التحكم.</p><button onclick="show('student')">العودة إلى رحلتي</button></div>`;
+async function finishQuiz(){
+  const score=Math.round(currentScore/currentQuiz.length*100);
+  const base=results[student.name]||{class:student.class,reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0}};
+  const r=JSON.parse(JSON.stringify(base));
+  const old=r[currentSubject]||{score:0,attempts:0};
+  r[currentSubject]={score:Math.max(Number(old.score)||0,score),attempts:(Number(old.attempts)||0)+1,last:score};
+  if(!r.domains)r.domains={};
+  if(!r.domains[currentSubject])r.domains[currentSubject]={};
+  if(window.quizDomainScores){
+    Object.keys(window.quizDomainScores).forEach(domain=>{
+      const d=window.quizDomainScores[domain], pct=d.total?Math.round(d.correct/d.total*100):0;
+      const oldD=r.domains[currentSubject][domain]||{score:0,attempts:0};
+      r.domains[currentSubject][domain]={score:Math.max(Number(oldD.score)||0,pct),attempts:(Number(oldD.attempts)||0)+1,last:pct};
+      if(!r.domainHistory)r.domainHistory={};
+      if(!r.domainHistory[currentSubject])r.domainHistory[currentSubject]={};
+      if(!r.domainHistory[currentSubject][domain])r.domainHistory[currentSubject][domain]=[];
+      r.domainHistory[currentSubject][domain].push({score:pct,date:new Date().toISOString()});
+    });
+  }
+
+  document.getElementById('quizHint').textContent='⏳ جارٍ حفظ نتيجتك وإجاباتك...';
+  const cloudSave=await saveStudentAttemptToCloud(score,currentQuiz.length,currentSubject,window.quizDomainScores);
+  const saveOk=cloudSave?.ok===true;
+  if(saveOk){
+    results[student.name]=r;
+    localStorage.setItem('bf_results',JSON.stringify(results));
+    try{await loadStudentCloudResults();}catch(e){}
+  }
+  const detail=cloudSave?.error?escapeHtml(cloudSave.error):'تعذر حفظ النتيجة في قاعدة البيانات.';
+  document.getElementById('quizHint').textContent=saveOk?'أحسنتِ! تم حفظ نتيجتك وإجاباتك في قاعدة البيانات.':'تعذر حفظ النتيجة سحابيًا.';
+  document.getElementById('questionArea').innerHTML=`<div style="text-align:center;padding:35px"><div style="font-size:60px">${saveOk?'🎉':'⚠️'}</div><h2>نتيجتك ${score}%</h2><p>${saveOk?'تم حفظ النتيجة وتفاصيل إجاباتك ويمكن للمعلمة الاطلاع عليها من لوحة التحكم.':'لم تُحفظ النتيجة السحابية، لذلك لن تُحتسب محاولة جديدة حتى يتم الحفظ بنجاح.'}</p>${saveOk?'':`<div class="notice" style="color:#b42318;text-align:right">سبب الحفظ: ${detail}</div>`}<button onclick="show('student')">العودة إلى رحلتي</button></div>`;
 }
 
 let weeklyTasks=JSON.parse(localStorage.getItem('bf_journeys')||'{}');
@@ -1150,18 +1157,57 @@ function renderResultsTable(){
   if(cf!=='all') arr=arr.filter(x=>x.r.class===cf);
   const thead=document.querySelector('#dashboard table thead tr');
   if(sf==='all'){
-    if(thead) thead.innerHTML='<th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th>';
+    if(thead) thead.innerHTML='<th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th><th>تفاصيل الحل</th>';
     body.innerHTML=arr.map(x=>{
       const v=['reading','science','math'].map(s=>x.r[s]?.score||0);
       const active=v.filter((_,i)=>x.r[['reading','science','math'][i]]?.attempts>0);
       const avg=active.length?Math.round(active.reduce((a,b)=>a+b,0)/active.length):0;
-      return `<tr><td><b>${escapeHtml(x.r.name)}</b></td><td>${escapeHtml(x.r.class)}</td><td>${v[0]}%</td><td>${v[1]}%</td><td>${v[2]}%</td><td><b>${avg}%</b></td></tr>`;
-    }).join('')||'<tr><td colspan="6" class="empty">لا توجد نتائج محفوظة في قاعدة البيانات حتى الآن.</td></tr>';
+      const has=active.length>0;
+      return `<tr><td><b>${escapeHtml(x.r.name)}</b></td><td>${escapeHtml(x.r.class)}</td><td>${v[0]}%</td><td>${v[1]}%</td><td>${v[2]}%</td><td><b>${avg}%</b></td><td>${has?`<button class="secondary" onclick="viewStudentLatestAttempt('${x.p.id}','')">عرض الحل</button>`:'-'}</td></tr>`;
+    }).join('')||'<tr><td colspan="7" class="empty">لا توجد نتائج محفوظة في قاعدة البيانات حتى الآن.</td></tr>';
   }else{
-    if(thead) thead.innerHTML='<th>الطالبة</th><th>الصف</th><th>المادة</th><th>النتيجة</th><th>عدد المحاولات</th>';
-    body.innerHTML=arr.map(x=>{const z=x.r[sf]||{score:0,attempts:0};return `<tr><td><b>${escapeHtml(x.r.name)}</b></td><td>${escapeHtml(x.r.class)}</td><td>${names[sf]}</td><td><b>${z.score||0}%</b></td><td>${z.attempts||0}</td></tr>`}).join('')||'<tr><td colspan="5" class="empty">لا توجد نتائج لهذه المادة حتى الآن.</td></tr>';
+    if(thead) thead.innerHTML='<th>الطالبة</th><th>الصف</th><th>المادة</th><th>النتيجة</th><th>عدد المحاولات</th><th>تفاصيل الحل</th>';
+    body.innerHTML=arr.map(x=>{const z=x.r[sf]||{score:0,attempts:0};return `<tr><td><b>${escapeHtml(x.r.name)}</b></td><td>${escapeHtml(x.r.class)}</td><td>${names[sf]}</td><td><b>${z.score||0}%</b></td><td>${z.attempts||0}</td><td>${z.attempts?`<button class="secondary" onclick="viewStudentLatestAttempt('${x.p.id}','${sf}')">عرض الحل</button>`:'-'}</td></tr>`}).join('')||'<tr><td colspan="6" class="empty">لا توجد نتائج لهذه المادة حتى الآن.</td></tr>';
   }
 }
+
+async function viewStudentLatestAttempt(studentId,subjectKey){
+  const panel=document.getElementById('attemptDetailsPanel'),out=document.getElementById('attemptDetailsOutput');
+  if(!panel||!out)return;
+  panel.style.display='block';
+  out.innerHTML='<div class="notice">⏳ جارٍ تحميل تفاصيل حل الطالبة...</div>';
+  try{
+    let query=supabaseClient.from('attempts').select('id,student_id,subject_id,score,total_questions,created_at').eq('student_id',studentId).order('created_at',{ascending:false});
+    if(subjectKey){const sr=subjectRowByKey(subjectKey);if(sr)query=query.eq('subject_id',sr.id);}
+    if(cloudProfile?.role==='teacher') query=query.eq('subject_id',cloudProfile.subject_id);
+    const {data:attempts,error}=await withTimeout(query,10000);
+    if(error)throw error;
+    const list=Array.isArray(attempts)?attempts:[];
+    if(!list.length){out.innerHTML='<div class="empty">لا توجد محاولة محفوظة لهذه الطالبة.</div>';return;}
+    const attempt=list[0];
+    const {data:ans,error:ansErr}=await withTimeout(supabaseClient.from('answers').select('attempt_id,question_id,selected_index,is_correct').eq('attempt_id',attempt.id),10000);
+    if(ansErr)throw ansErr;
+    const qids=(ans||[]).map(a=>a.question_id).filter(Boolean);
+    let qData=[];
+    if(qids.length){const qr=await withTimeout(supabaseClient.from('questions').select('id,question_text,option_a,option_b,option_c,option_d,correct_index,correct_answer').in('id',qids),10000);if(qr.error)throw qr.error;qData=qr.data||[];}
+    const map={};qData.forEach(q=>map[String(q.id)]=q);
+    const rows=(ans||[]).sort((a,b)=>qids.indexOf(a.question_id)-qids.indexOf(b.question_id)).map((a,i)=>{
+      const q=map[String(a.question_id)]||{};
+      const opts=[q.option_a,q.option_b,q.option_c,q.option_d];
+      const sel=Number(a.selected_index);
+      const ci=Number.isInteger(Number(q.correct_index))?Number(q.correct_index):({A:0,B:1,C:2,D:3}[String(q.correct_answer||'').toUpperCase()]??0);
+      return `<tr><td>${i+1}</td><td>${escapeHtml(q.question_text||'')}</td><td>${escapeHtml(String(opts[sel]??'-'))}</td><td>${escapeHtml(String(opts[ci]??q.correct_answer??'-'))}</td><td>${a.is_correct?'✅ صحيحة':'❌ خاطئة'}</td></tr>`;
+    }).join('');
+    const studentName=cloudStudentProfiles.find(p=>String(p.id)===String(studentId))?.full_name||'الطالبة';
+    const sub=subjectKeyById(attempt.subject_id);
+    out.innerHTML=`<div class="notice"><b>الطالبة:</b> ${escapeHtml(studentName)} &nbsp; <b>المادة:</b> ${names[sub]||sub||'-'} &nbsp; <b>النتيجة:</b> ${Number(attempt.score)||0}% &nbsp; <b>التاريخ:</b> ${attempt.created_at?new Date(attempt.created_at).toLocaleString('ar-SA'):'-'}</div><table><thead><tr><th>#</th><th>السؤال</th><th>إجابة الطالبة</th><th>الإجابة الصحيحة</th><th>النتيجة</th></tr></thead><tbody>${rows||'<tr><td colspan="5">لم تُحفظ تفاصيل الإجابات.</td></tr>'}</tbody></table>`;
+    panel.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){
+    console.warn('attempt details:',e);
+    out.innerHTML='<div class="notice" style="color:#b42318">❌ تعذر تحميل تفاصيل الحل: '+escapeHtml(e?.message||'خطأ غير معروف')+'</div>';
+  }
+}
+function closeAttemptDetails(){const p=document.getElementById('attemptDetailsPanel');if(p)p.style.display='none';}
 
 async function renderTeacher(){
   applyTeacherSubjectLock();
@@ -1182,38 +1228,61 @@ async function renderTeacher(){
   if(typeof populateReportStudents==='function') populateReportStudents();
 }
 
-// الطالبات يجلبن الأسئلة المنشورة مباشرة من Supabase بحسب المادة
+// الطالبات يجلبن الأسئلة المنشورة من Supabase، ويُسمح بمحاولة واحدة فقط لكل مجموعة منشورة.
+function questionSetKey(ids){
+  return Array.from(new Set((ids||[]).map(x=>String(x)))).sort().join('|');
+}
+async function getPublishedStudentPool(sub){
+  if(!studentAuthUser) throw new Error('جلسة الطالبة غير فعّالة. أعيدي الدخول إلى الرحلة.');
+  if(!cloudSubjects.length || !cloudDomains.length) await loadCloudReferenceData();
+  const subjectRow=subjectRowByKey(sub);
+  if(!subjectRow) throw new Error('تعذر تحديد مادة '+(names[sub]||sub)+' في قاعدة البيانات.');
+  const {data,error}=await withTimeout(
+    supabaseClient.from('questions').select('*').eq('subject_id',subjectRow.id).eq('is_published',true).order('created_at',{ascending:false}),
+    10000
+  );
+  if(error) throw new Error(error.message||'تعذر تحميل الأسئلة المنشورة.');
+  const published=(Array.isArray(data)?data:[]).map(mapCloudQuestion).filter(q=>q.is_published===true&&q.subject===sub);
+  return {subjectRow,published};
+}
+async function findCompletedAttemptForSet(subjectRow,questionIds){
+  const targetKey=questionSetKey(questionIds);
+  if(!targetKey) return null;
+  const {data:attempts,error:ae}=await withTimeout(
+    supabaseClient.from('attempts').select('id,score,total_questions,created_at').eq('student_id',studentAuthUser.id).eq('subject_id',subjectRow.id).order('created_at',{ascending:false}),
+    10000
+  );
+  if(ae) throw new Error(ae.message||'تعذر التحقق من المحاولات السابقة.');
+  const list=Array.isArray(attempts)?attempts:[];
+  const ids=list.map(a=>a.id).filter(Boolean);
+  if(!ids.length) return null;
+  const {data:answers,error:ansErr}=await withTimeout(
+    supabaseClient.from('answers').select('attempt_id,question_id').in('attempt_id',ids),
+    10000
+  );
+  if(ansErr) throw new Error(ansErr.message||'تعذر التحقق من تفاصيل المحاولات السابقة.');
+  const groups={};
+  (answers||[]).forEach(a=>{const k=String(a.attempt_id);if(!groups[k])groups[k]=[];groups[k].push(String(a.question_id));});
+  for(const a of list){
+    const got=questionSetKey(groups[String(a.id)]||[]);
+    if(got && got===targetKey && (Number(a.total_questions)||0)===questionIds.length) return a;
+  }
+  return null;
+}
 async function startQuiz(sub){
   currentSubject=sub;
   try{
-    if(!studentAuthUser){
-      alert('جلسة الطالبة غير فعّالة. أعيدي الدخول إلى الرحلة.');
+    const {subjectRow,published}=await getPublishedStudentPool(sub);
+    if(!published.length){alert('لا توجد أسئلة منشورة في هذا القسم حاليًا.');return;}
+    const already=await findCompletedAttemptForSet(subjectRow,published.map(q=>q.id));
+    if(already){
+      const when=already.created_at?new Date(already.created_at).toLocaleString('ar-SA'):'';
+      alert('🔒 تم حل هذا التدريب مسبقًا. لا يمكنك الدخول إليه مرة أخرى حتى تنشر المعلمة تدريبًا/سؤالًا جديدًا وتوقف نشر التدريب الحالي.'+(when?'\n\nآخر محاولة: '+when:'')+'\n\nالنتيجة السابقة: '+(Number(already.score)||0)+'%');
       return;
     }
-    if(!cloudSubjects.length || !cloudDomains.length) await loadCloudReferenceData();
-    const subjectRow=subjectRowByKey(sub);
-    if(!subjectRow){
-      alert('تعذر تحديد مادة '+(names[sub]||sub)+' في قاعدة البيانات.');
-      return;
-    }
-    const {data,error}=await withTimeout(
-      supabaseClient.from('questions')
-        .select('*')
-        .eq('subject_id',subjectRow.id)
-        .eq('is_published',true)
-        .order('created_at',{ascending:false}),
-      10000
-    );
-    if(error){
-      console.warn('student published questions:',error);
-      alert('تعذر تحميل الأسئلة المنشورة: '+(error.message||'خطأ غير معروف'));
-      return;
-    }
-    // تحديث بنك الطالبة من المصدر السحابي نفسه
-    const published=(Array.isArray(data)?data:[]).map(mapCloudQuestion).filter(q=>q.is_published===true);
     questions=published;
     localStorage.setItem('bf_questions',JSON.stringify(questions));
-    let pool=published.filter(q=>q.subject===sub);
+    let pool=published;
     if(sub==='reading'){
       const hp=pool.some(q=>q.trainingType==='passage');
       const hi=pool.some(q=>q.trainingType!=='passage');
@@ -1222,20 +1291,18 @@ async function startQuiz(sub){
         currentQuiz=pool.filter(q=>choice?q.trainingType==='passage':q.trainingType!=='passage');
       }else if(hp) currentQuiz=pool.filter(q=>q.trainingType==='passage');
       else currentQuiz=pool.filter(q=>q.trainingType!=='passage');
-    }else{
-      currentQuiz=pool;
-    }
-    if(!currentQuiz.length){
-      alert('لا توجد أسئلة منشورة في هذا القسم حاليًا.');
-      return;
-    }
+    }else currentQuiz=pool;
+    if(!currentQuiz.length){alert('لا توجد أسئلة منشورة في هذا القسم حاليًا.');return;}
+    // التأكد من أن القفل مرتبط بالأسئلة الفعلية التي ستدخلها الطالبة.
+    const subsetAlready=currentQuiz.length!==published.length?null:already;
+    if(subsetAlready){return;}
     currentIndex=0;currentScore=0;window.quizDomainScores={};window.currentAnswerRows=[];
     document.getElementById('quizTitle').textContent=names[sub];
     document.getElementById('quizHint').textContent='اختاري الإجابة الأنسب، وبعد الإجابة ستنتقلين للسؤال التالي.';
     show('quiz');renderQuestion();
   }catch(e){
     console.error('startQuiz student:',e);
-    alert(e?.message==='TIMEOUT'?'استغرق تحميل الأسئلة وقتًا أطول من المتوقع. أعيدي المحاولة.':'تعذر تحميل الأسئلة المنشورة.');
+    alert(e?.message||'تعذر التحقق من حالة التدريب.');
   }
 }
 
@@ -1436,4 +1503,233 @@ function printSupportPlan(){
   const w=window.open('','_blank');
   w.document.write(`<html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>خطة الدعم العلاجي - بوصلة الفهم</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#222}h1,h2,h3{text-align:center;color:#5d479c}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{border:1px solid #bbb;padding:9px;text-align:right}th{background:#f2edf9}.header{text-align:center;border-bottom:2px solid #7657c8;padding-bottom:15px}.note{margin-top:20px;padding:12px;background:#f5f0ff;border-radius:10px}@media print{button{display:none}}</style></head><body><div class="header"><h1>🧭 بوصلة الفهم</h1><h2>خطة الدعم العلاجي</h2><p>متوسطة 178 — تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</p></div>${el.innerHTML}<div class="note"><b>آلية المتابعة:</b> تنفيذ التدريب العلاجي، ثم إعادة قياس المجال، وتوثيق التحسن في النتائج اللاحقة.</div></body></html>`); w.document.close();w.focus();setTimeout(()=>w.print(),300);
 }
+// ===== FINAL CLOUD TASK/ATTEMPT FLOW =====
+let currentTaskId = null;
+let currentTaskSubjectId = null;
+let currentQuizStartedAt = null;
+
+function pctFromAttempt(a){
+  const total=Number(a?.total ?? a?.total_questions ?? 0);
+  const score=Number(a?.score ?? 0);
+  return total>0 ? Math.round(score/total*100) : 0;
+}
+
+async function getActiveTaskForSubject(subjectKey){
+  if(!cloudReady) throw new Error('جلسة المستخدم السحابية غير فعالة.');
+  if(!cloudSubjects.length) await loadCloudReferenceData();
+  const sr=subjectRowByKey(subjectKey);
+  if(!sr) throw new Error('تعذر تحديد المادة في قاعدة البيانات.');
+  let q=supabaseClient.from('tasks').select('id,title,subject_id,created_by,is_published,published_at,stopped_at').eq('subject_id',sr.id).eq('is_published',true).order('published_at',{ascending:false}).limit(1);
+  const {data,error}=await withTimeout(q,10000);
+  if(error) throw new Error(error.message||'تعذر تحميل التدريب المنشور.');
+  const task=Array.isArray(data)&&data.length?data[0]:null;
+  return {task,subjectRow:sr};
+}
+
+async function getPublishedStudentPool(sub){
+  const {task,subjectRow}=await getActiveTaskForSubject(sub);
+  if(!task) return {task:null,subjectRow,published:[]};
+  const tq=await withTimeout(
+    supabaseClient.from('task_questions').select('question_id,question_order').eq('task_id',task.id).order('question_order',{ascending:true}),
+    10000
+  );
+  if(tq.error) throw new Error(tq.error.message||'تعذر تحميل أسئلة التدريب.');
+  const ids=(tq.data||[]).map(x=>Number(x.question_id)).filter(Number.isFinite);
+  if(!ids.length) return {task,subjectRow,published:[]};
+  const qr=await withTimeout(supabaseClient.from('questions').select('*').in('id',ids),10000);
+  if(qr.error) throw new Error(qr.error.message||'تعذر تحميل أسئلة التدريب.');
+  const byId={};(qr.data||[]).forEach(x=>byId[String(x.id)]=mapCloudQuestion(x));
+  const published=ids.map(id=>byId[String(id)]).filter(Boolean).filter(q=>q.subject===sub);
+  return {task,subjectRow,published};
+}
+
+async function findCompletedAttemptForTask(taskId){
+  if(!taskId || !studentAuthUser) return null;
+  const {data,error}=await withTimeout(
+    supabaseClient.from('attempts').select('id,task_id,score,total,started_at,completed_at').eq('student_id',studentAuthUser.id).eq('task_id',taskId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1),
+    10000
+  );
+  if(error) throw new Error(error.message||'تعذر التحقق من المحاولات السابقة.');
+  return Array.isArray(data)&&data.length?data[0]:null;
+}
+
+async function startQuiz(sub){
+  currentSubject=sub;
+  try{
+    const {task,subjectRow,published}=await getPublishedStudentPool(sub);
+    if(!task || !published.length){alert('لا توجد أسئلة منشورة في هذا القسم حاليًا.');return;}
+    const already=await findCompletedAttemptForTask(task.id);
+    if(already){
+      const when=already.completed_at?new Date(already.completed_at).toLocaleString('ar-SA'):'';
+      alert('🔒 تم حل هذا التدريب مسبقًا. لا يمكنك الدخول إليه مرة أخرى حتى توقف المعلمة التدريب الحالي وتنشر تدريبًا جديدًا.'+(when?'\n\nآخر محاولة: '+when:'')+'\n\nالنتيجة السابقة: '+pctFromAttempt(already)+'%');
+      return;
+    }
+    currentTaskId=task.id;
+    currentTaskSubjectId=subjectRow.id;
+    currentQuiz=published;
+    questions=published;
+    localStorage.setItem('bf_questions',JSON.stringify(questions));
+    currentIndex=0;currentScore=0;window.quizDomainScores={};window.currentAnswerRows=[];currentQuizStartedAt=new Date().toISOString();
+    document.getElementById('quizTitle').textContent=names[sub];
+    document.getElementById('quizHint').textContent='اختاري الإجابة الأنسب، وبعد الإجابة ستنتقلين للسؤال التالي.';
+    show('quiz');renderQuestion();
+  }catch(e){
+    console.error('startQuiz student:',e);
+    alert(e?.message||'تعذر فتح التدريب.');
+  }
+}
+
+async function saveStudentAttemptToCloud(score,total,subject,domainScores){
+  if(!studentAuthUser)return {ok:false,error:'جلسة الطالبة غير فعالة.'};
+  if(!currentTaskId)return {ok:false,error:'لم يتم تحديد التدريب المنشور. أعيدي الدخول إلى المادة.'};
+  try{
+    const {data,error}=await supabaseClient.from('attempts').insert({
+      student_id:studentAuthUser.id,
+      task_id:currentTaskId,
+      score:Number(score)||0,
+      total:Number(total)||0,
+      started_at:currentQuizStartedAt||new Date().toISOString(),
+      completed_at:new Date().toISOString()
+    }).select('id,task_id,student_id,score,total,started_at,completed_at').single();
+    if(error){
+      if(String(error.code||'')==='23505' || /duplicate key|unique constraint/i.test(String(error.message||''))) return {ok:false,error:'🔒 هذا التدريب تم حله مسبقًا. لا يمكن إعادة المحاولة حتى نشر تدريب جديد.'};
+      return {ok:false,error:error.message||'تعذر حفظ المحاولة.'};
+    }
+    const rows=(window.currentAnswerRows||[]).map(x=>({
+      attempt_id:data.id,
+      question_id:Number(x.question_id),
+      selected_answer:['A','B','C','D'][Math.max(0,Math.min(Number(x.selected_index)||0,3))],
+      is_correct:Boolean(x.is_correct)
+    }));
+    if(rows.length){
+      const ar=await supabaseClient.from('answers').insert(rows);
+      if(ar.error){
+        try{await supabaseClient.from('attempts').delete().eq('id',data.id).eq('student_id',studentAuthUser.id);}catch(cleanErr){console.warn('rollback attempt:',cleanErr)}
+        return {ok:false,error:ar.error.message||'تعذر حفظ تفاصيل الإجابات.'};
+      }
+    }
+    return {ok:true,attemptId:data.id,questionIds:rows.map(x=>x.question_id)};
+  }catch(e){
+    console.warn('saveStudentAttemptToCloud:',e);
+    return {ok:false,error:e?.message||'تعذر حفظ النتيجة.'};
+  }
+}
+
+async function loadStudentCloudResults(){
+  if(!studentAuthUser)return;
+  try{
+    const {data:attempts,error}=await supabaseClient.from('attempts').select('id,task_id,score,total,completed_at').eq('student_id',studentAuthUser.id).order('completed_at',{ascending:false});
+    if(error) throw error;
+    const taskIds=[...new Set((attempts||[]).map(a=>a.task_id).filter(Boolean).map(Number))];
+    let tasks=[];
+    if(taskIds.length){const tr=await supabaseClient.from('tasks').select('id,subject_id,title').in('id',taskIds);if(tr.error)throw tr.error;tasks=tr.data||[];}
+    const taskMap={};tasks.forEach(t=>taskMap[String(t.id)]=t);
+    const r={class:student?.class||'غير محدد',reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0},domains:{}};
+    (attempts||[]).forEach(a=>{
+      const t=taskMap[String(a.task_id)]; if(!t)return;
+      const sub=subjectKeyById(t.subject_id); if(!['reading','science','math'].includes(sub))return;
+      const x=r[sub]||{score:0,attempts:0};
+      x.score=Math.max(x.score,pctFromAttempt(a));x.attempts=(x.attempts||0)+1;r[sub]=x;
+    });
+    results[student.name]=r;localStorage.setItem('bf_results',JSON.stringify(results));
+  }catch(e){console.warn('loadStudentCloudResults:',e)}
+}
+
+async function publishSelectedTask(ids,subject){
+  if(!cloudReady||!cloudProfile?.id) throw new Error('جلسة المعلمة غير فعالة.');
+  if(!cloudSubjects.length) await loadCloudReferenceData();
+  const sr=subjectRowByKey(subject); if(!sr) throw new Error('تعذر تحديد المادة.');
+  const qIds=[...new Set(ids.map(Number).filter(Number.isFinite))]; if(!qIds.length) throw new Error('اختاري سؤالًا واحدًا على الأقل.');
+  // Stop existing active task(s) for this teacher/subject.
+  let tq=supabaseClient.from('tasks').select('id').eq('subject_id',sr.id).eq('is_published',true);
+  if(cloudProfile.role==='teacher') tq=tq.eq('created_by',cloudProfile.id);
+  const active=await withTimeout(tq,10000); if(active.error)throw active.error;
+  const oldTaskIds=(active.data||[]).map(t=>Number(t.id));
+  if(oldTaskIds.length){
+    const u=await supabaseClient.from('tasks').update({is_published:false,stopped_at:new Date().toISOString()}).in('id',oldTaskIds); if(u.error)throw u.error;
+    const oldTq=await supabaseClient.from('task_questions').select('question_id').in('task_id',oldTaskIds); if(oldTq.error)throw oldTq.error;
+    const oldQ=[...new Set((oldTq.data||[]).map(x=>Number(x.question_id)).filter(Number.isFinite))];
+    if(oldQ.length){let qu=supabaseClient.from('questions').update({is_published:false}).in('id',oldQ);if(cloudProfile.role==='teacher')qu=qu.eq('created_by',cloudProfile.id);const qres=await qu;if(qres.error)throw qres.error;}
+  }
+  const taskInsert=await supabaseClient.from('tasks').insert({title:`${names[subject]||subject} — تدريب جديد`,subject_id:sr.id,created_by:cloudProfile.id,is_published:true,published_at:new Date().toISOString()}).select('id,title,subject_id,created_by,is_published,published_at,stopped_at').single();
+  if(taskInsert.error)throw taskInsert.error;
+  const taskId=taskInsert.data.id;
+  const tqRows=qIds.map((id,i)=>({task_id:taskId,question_id:id,question_order:i+1}));
+  const ins=await supabaseClient.from('task_questions').insert(tqRows); if(ins.error)throw ins.error;
+  let qpub=supabaseClient.from('questions').update({is_published:true}).in('id',qIds); if(cloudProfile.role==='teacher')qpub=qpub.eq('created_by',cloudProfile.id); const qr=await qpub;if(qr.error)throw qr.error;
+  await loadCloudQuestions();
+  return taskInsert.data;
+}
+
+async function publishWeeklyTask(){
+  const ids=[...document.querySelectorAll('#weeklyQuestionBank input[type="checkbox"]:checked')].map(x=>String(x.value));
+  const subject=document.getElementById('weeklySubject')?.value||'all';
+  if(subject==='all'){alert('اختاري مادة واحدة أولًا.');return;}
+  if(!ids.length){alert('اختاري سؤالًا واحدًا أو أكثر أولًا.');return;}
+  try{
+    await publishSelectedTask(ids,subject);
+    document.querySelectorAll('#weeklyQuestionBank input[type="checkbox"]').forEach(x=>x.checked=false);
+    renderWeeklyBank();renderPublishedTasks();renderStats();
+    alert('✅ تم نشر التدريب للطالبات، وتم إيقاف التدريب السابق في المادة تلقائيًا.');
+  }catch(e){console.error('publish task:',e);alert('تعذر نشر التدريب: '+(e?.message||'خطأ غير معروف'));}
+}
+
+async function toggleQuestionPublished(id){
+  const q=questions.find(x=>String(x.id)===String(id)); if(!q)return;
+  try{
+    // Stopping any active task containing this question.
+    const links=await supabaseClient.from('task_questions').select('task_id').eq('question_id',Number(id)); if(links.error)throw links.error;
+    const ids=[...new Set((links.data||[]).map(x=>Number(x.task_id)).filter(Number.isFinite))];
+    if(ids.length){let u=supabaseClient.from('tasks').update({is_published:false,stopped_at:new Date().toISOString()}).in('id',ids);if(cloudProfile?.role==='teacher')u=u.eq('created_by',cloudProfile.id);const ur=await u;if(ur.error)throw ur.error;}
+    let qu=supabaseClient.from('questions').update({is_published:false}).eq('id',Number(id));if(cloudProfile?.role==='teacher')qu=qu.eq('created_by',cloudProfile.id);const qr=await qu;if(qr.error)throw qr.error;
+    await loadCloudQuestions();renderWeeklyBank();renderPublishedTasks();alert('⏸ تم إيقاف نشر التدريب.');
+  }catch(e){console.error('stop task:',e);alert('تعذر إيقاف النشر: '+(e?.message||'خطأ غير معروف'));}
+}
+
+async function loadCloudAdminResults(){
+  if(!cloudReady || !cloudProfile || !['admin','teacher'].includes(cloudProfile.role)) return;
+  try{
+    let pq=supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('role','student');
+    if(cloudProfile.role==='teacher')pq=pq.eq('subject_id',cloudProfile.subject_id);
+    const pr=await pq;if(pr.error)throw pr.error;
+    const studentProfiles=pr.data||[];
+    const allowedStudentIds=new Set(studentProfiles.map(p=>String(p.id)));
+    let aq=supabaseClient.from('attempts').select('id,student_id,task_id,score,total,started_at,completed_at').order('completed_at',{ascending:false});
+    const ar=await aq;if(ar.error)throw ar.error;
+    let rawAttempts=(ar.data||[]).filter(a=>allowedStudentIds.has(String(a.student_id)));
+    const taskIds=[...new Set(rawAttempts.map(a=>Number(a.task_id)).filter(Number.isFinite))];
+    let tasks=[]; if(taskIds.length){const tr=await supabaseClient.from('tasks').select('id,subject_id,title,created_by').in('id',taskIds);if(tr.error)throw tr.error;tasks=tr.data||[];}
+    const taskMap={};tasks.forEach(t=>taskMap[String(t.id)]=t);
+    cloudStudentProfiles=studentProfiles;
+    cloudAttempts=rawAttempts.map(a=>{const t=taskMap[String(a.task_id)]||{};return {...a,subject_id:t.subject_id||null,title:t.title||'',created_at:a.completed_at||a.started_at||null};});
+    const byId={};
+    studentProfiles.forEach(p=>{byId[p.id]={id:p.id,name:p.full_name||'طالبة',class:cloudClassNameById(p.class_id)||'-',reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0},domains:{}};});
+    cloudAttempts.forEach(a=>{const r=byId[a.student_id];const sub=subjectKeyById(a.subject_id);if(!r||!sub)return;const x=r[sub];const pct=pctFromAttempt(a);x.score=Math.max(x.score,pct);x.attempts++;});
+    results={};Object.values(byId).forEach(r=>results[r.name]=r);localStorage.setItem('bf_results',JSON.stringify(results));
+  }catch(e){console.warn('cloud results:',e);}
+}
+
+async function viewStudentLatestAttempt(studentId,subjectKey){
+  const panel=document.getElementById('attemptDetailsPanel'),out=document.getElementById('attemptDetailsOutput');if(!panel||!out)return;panel.style.display='block';out.innerHTML='<div class="notice">⏳ جارٍ تحميل تفاصيل حل الطالبة...</div>';
+  try{
+    let aq=supabaseClient.from('attempts').select('id,student_id,task_id,score,total,started_at,completed_at').eq('student_id',studentId).order('completed_at',{ascending:false});
+    const ar=await withTimeout(aq,10000);if(ar.error)throw ar.error;let attempts=ar.data||[];
+    const taskIds=[...new Set(attempts.map(a=>Number(a.task_id)).filter(Number.isFinite))];let tasks=[];
+    if(taskIds.length){const tr=await supabaseClient.from('tasks').select('id,subject_id,title').in('id',taskIds);if(tr.error)throw tr.error;tasks=tr.data||[];}
+    const tm={};tasks.forEach(t=>tm[String(t.id)]=t);
+    attempts=attempts.filter(a=>{const t=tm[String(a.task_id)];if(!t)return false;const sub=subjectKeyById(t.subject_id);if(subjectKey)return sub===subjectKey;return cloudProfile?.role==='teacher'?String(t.subject_id)===String(cloudProfile.subject_id):true;});
+    const attempt=attempts[0];if(!attempt){out.innerHTML='<div class="empty">لا توجد محاولة محفوظة لهذه الطالبة.</div>';return;}
+    const task=tm[String(attempt.task_id)],sub=subjectKeyById(task.subject_id);
+    const ansRes=await supabaseClient.from('answers').select('attempt_id,question_id,selected_answer,is_correct').eq('attempt_id',attempt.id);if(ansRes.error)throw ansRes.error;
+    const qids=(ansRes.data||[]).map(a=>Number(a.question_id)).filter(Number.isFinite);let qData=[];
+    if(qids.length){const qr=await supabaseClient.from('questions').select('id,question_text,option_a,option_b,option_c,option_d,correct_index,correct_answer').in('id',qids);if(qr.error)throw qr.error;qData=qr.data||[];}
+    const qm={};qData.forEach(q=>qm[String(q.id)]=q);
+    const letter={A:0,B:1,C:2,D:3};
+    const rows=(ansRes.data||[]).map((a,i)=>{const q=qm[String(a.question_id)]||{};const opts=[q.option_a,q.option_b,q.option_c,q.option_d];const si=letter[String(a.selected_answer||'').toUpperCase()]??-1;const ci=Number.isInteger(Number(q.correct_index))?Number(q.correct_index):(letter[String(q.correct_answer||'').toUpperCase()]??0);return `<tr><td>${i+1}</td><td>${escapeHtml(q.question_text||'')}</td><td>${escapeHtml(si>=0?String((opts[si] ?? a.selected_answer) ?? '-'):'-')}</td><td>${escapeHtml(String(opts[ci]??q.correct_answer??'-'))}</td><td>${a.is_correct?'✅ صحيحة':'❌ خاطئة'}</td></tr>`}).join('');
+    const studentName=cloudStudentProfiles.find(p=>String(p.id)===String(studentId))?.full_name||'الطالبة';
+    out.innerHTML=`<div class="notice"><b>الطالبة:</b> ${escapeHtml(studentName)} &nbsp; <b>المادة:</b> ${names[sub]||sub||'-'} &nbsp; <b>النتيجة:</b> ${pctFromAttempt(attempt)}% &nbsp; <b>الدرجة:</b> ${Number(attempt.score)||0}/${Number(attempt.total)||0} &nbsp; <b>التاريخ:</b> ${attempt.completed_at?new Date(attempt.completed_at).toLocaleString('ar-SA'):'-'}</div><table><thead><tr><th>#</th><th>السؤال</th><th>إجابة الطالبة</th><th>الإجابة الصحيحة</th><th>النتيجة</th></tr></thead><tbody>${rows||'<tr><td colspan="5">لم تُحفظ تفاصيل الإجابات.</td></tr>'}</tbody></table>`;
+    panel.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){console.warn('attempt details:',e);out.innerHTML='<div class="notice" style="color:#b42318">❌ تعذر تحميل تفاصيل الحل: '+escapeHtml(e?.message||'خطأ غير معروف')+'</div>'}
+}
+
 </script>
