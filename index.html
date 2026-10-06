@@ -415,54 +415,24 @@ async function loginTeacher(){
   msg.innerHTML='<div class="notice">⏳ جارٍ التحقق من الحساب...</div>';
   try{
     if(!navigator.onLine) throw new Error('لا يوجد اتصال بالإنترنت في الجهاز.');
-
-    // إنهاء أي جلسة طالبة/حساب قديمة قبل بدء جلسة المشرفة أو المعلمة.
-    try{ await withTimeout(supabaseClient.auth.signOut(),8000); }catch(e){ console.warn('signout before teacher login:',e); }
-
-    // استخدام Supabase SDK مباشرة بدل طلب fetch يدوي حتى يكون دخول المعلمة
-    // متوافقًا مع نفس مسار المصادقة الذي يعمل مع دخول الطالبة.
-    const authResult=await withTimeout(
-      supabaseClient.auth.signInWithPassword({email,password}),
-      15000
-    );
-    const {data,error}=authResult||{};
-    if(error){
-      const msgText=error.message||'تعذر تسجيل الدخول.';
-      msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+msgText+'</div>';
-      return;
-    }
+    try{await withTimeout(supabaseClient.auth.signOut(),5000);}catch(e){}
+    const {data,error}=await withTimeout(supabaseClient.auth.signInWithPassword({email,password}),12000);
+    if(error){msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+(error.message||'بيانات الدخول غير صحيحة.')+'</div>';return}
     const user=data?.user;
-    if(!user){
-      msg.innerHTML='<div class="notice" style="color:#b42318">لم تُرجع خدمة الحساب بيانات المستخدم.</div>';
-      return;
-    }
-
-    msg.innerHTML='<div class="notice">⏳ تم التحقق من الحساب، جارٍ تحميل الصلاحيات...</div>';
-    const profileResult=await withTimeout(
-      supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',user.id).maybeSingle(),
-      12000
-    );
-    const {data:profile,error:pe}=profileResult||{};
-    if(pe||!profile){
-      await supabaseClient.auth.signOut();
-      msg.innerHTML='<div class="notice" style="color:#b42318">تم تسجيل الدخول، لكن لم يتم العثور على ملف الصلاحيات في جدول profiles.</div>';
-      return;
-    }
-    if(!['admin','teacher'].includes(profile.role)){
-      await supabaseClient.auth.signOut();
-      msg.innerHTML='<div class="notice" style="color:#b42318">هذا الحساب ليس حساب معلمة أو مشرفة.</div>';
-      return;
-    }
+    if(!user){msg.innerHTML='<div class="notice" style="color:#b42318">لم تُرجع خدمة الحسابات بيانات المستخدم.</div>';return}
+    msg.innerHTML='<div class="notice">⏳ تم التحقق، جارٍ تحميل الصلاحيات...</div>';
+    const {data:profile,error:pe}=await withTimeout(supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',user.id).maybeSingle(),8000);
+    if(pe||!profile){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">تم تسجيل الدخول لكن لم يتم العثور على ملف الصلاحيات.</div>';return}
+    if(!['admin','teacher'].includes(profile.role)){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">هذا الحساب ليس حساب معلمة أو مشرفة.</div>';return}
     cloudProfile=profile; cloudReady=true;
-    msg.innerHTML='<div class="notice">⏳ تم الدخول بنجاح، جارٍ تحميل لوحة التحكم...</div>';
-    await loadCloudReferenceData();
-    await loadCloudQuestions();
+    // افتحي اللوحة فور نجاح المصادقة؛ التحليلات الثقيلة تُحمّل في الخلفية ولا تعطل الدخول.
     show('teacher');
+    msg.innerHTML='<div class="notice">✅ تم الدخول بنجاح.</div>';
+    Promise.allSettled([withTimeout(loadCloudReferenceData(),5000),withTimeout(loadCloudQuestions(),7000)])
+      .then(()=>renderTeacher().catch(e=>console.warn('dashboard refresh:',e)));
   }catch(e){
     console.error('teacher login:',e);
-    const message=e?.message==='TIMEOUT'
-      ? 'استغرق الاتصال بخدمة الحسابات وقتًا أطول من المتوقع. تحققي من اتصال الإنترنت ثم أعيدي المحاولة.'
-      : (e?.message||'تعذر الاتصال بخدمة تسجيل الدخول.');
+    const message=e?.message==='TIMEOUT'?'استغرق الاتصال بخدمة الحسابات وقتًا أطول من المتوقع. تحققي من الاتصال ثم أعيدي المحاولة.':(e?.message||'تعذر الاتصال بخدمة تسجيل الدخول.');
     msg.innerHTML='<div class="notice" style="color:#b42318">'+message+'</div>';
   }
 }
@@ -1231,45 +1201,19 @@ function renderReports(){
 }
 
 // إعادة تحميل التحليل السحابي عند فتح لوحة المعلمة
-async function renderTeacher(){applyTeacherSubjectLock();if(cloudReady)await loadCloudAdminResults();const studentCount=cloudReady?cloudStudentProfiles.length:Object.keys(results).length;document.getElementById('tStudents').textContent=studentCount;document.getElementById('tQuestions').textContent=questions.length;let attempts=0,sum=0,count=0;if(cloudReady){cloudAttempts.forEach(a=>{attempts++;sum+=Number(a.score)||0;count++;});}else Object.keys(results).forEach(n=>['reading','science','math'].forEach(s=>{let x=results[n][s];if(x?.attempts){attempts+=x.attempts;sum+=x.score;count++;}}));document.getElementById('tAttempts').textContent=attempts;document.getElementById('tAverage').textContent=(count?Math.round(sum/count):0)+'%';renderResultsTable();applyTeacherSubjectLock();updateSkillOptions();toggleQuestionBuilder();renderBank();if(typeof populateReportStudents==='function')populateReportStudents();}
-
-// ===== لوحة المشرفة التحليلية =====
-function renderDashboardInsights(){
-  const box=document.getElementById('dashboardInsights'); if(!box)return;
-  const profiles=cloudStudentProfiles||[];
-  const subjectFilter=document.getElementById('subjectFilter')?.value||'all';
-  const classFilter=document.getElementById('classFilter')?.value||'all';
-  const selected=profiles.filter(p=>classFilter==='all'||cloudClassNameById(p.class_id)===classFilter);
-  const allowedStudents=new Set(selected.map(p=>p.id));
-  const attempts=(cloudAttempts||[]).filter(a=>allowedStudents.has(a.student_id)&&(subjectFilter==='all'||subjectKeyById(a.subject_id)===subjectFilter));
-  const subjectKeys=subjectFilter==='all'?['reading','science','math']:[subjectFilter];
-  const subjectStats=subjectKeys.map(sub=>{const aa=attempts.filter(a=>subjectKeyById(a.subject_id)===sub);return {sub,n:names[sub],avg:aa.length?Math.round(aa.reduce((x,a)=>x+(Number(a.score)||0),0)/aa.length):0,attempts:aa.length};});
-  const domainAgg={};
-  Object.values(results||{}).forEach(r=>{
-    if(classFilter!=='all' && r.class!==classFilter)return;
-    const subs=subjectFilter==='all'?['reading','science','math']:[subjectFilter];
-    subs.forEach(sub=>Object.entries(r.domains?.[sub]||{}).forEach(([domain,d])=>{
-      if(!d?.attempts)return; const k=sub+'|'+domain;
-      if(!domainAgg[k])domainAgg[k]={sub,domain,scores:[],attempts:0};
-      domainAgg[k].scores.push(Number(d.score)||0); domainAgg[k].attempts+=Number(d.attempts)||0;
-    }));
-  });
-  const domains=Object.values(domainAgg).map(d=>({...d,avg:avg(d.scores)})).sort((a,b)=>a.avg-b.avg);
-  const weak=domains.filter(d=>d.attempts>0).slice(0,3);
-  const strong=domains.filter(d=>d.attempts>0).slice().sort((a,b)=>b.avg-a.avg).slice(0,3);
-  const status=v=>v>=80?'قوة جيدة':v>=60?'يحتاج متابعة':'أولوية تحسين';
-  box.innerHTML=`<h3 style="margin-top:0">🧭 الملخص التحليلي السريع</h3>
-    <div class="stats" style="margin-top:10px">
-      <div class="stat">الطالبات في النطاق<b>${selected.length}</b></div>
-      <div class="stat">المحاولات<b>${attempts.length}</b></div>
-      <div class="stat">المجالات المقاسة<b>${domains.length}</b></div>
-      <div class="stat">متوسط الأداء<b>${avg(subjectStats.filter(x=>x.attempts).map(x=>x.avg))}%</b></div>
-    </div>
-    <div class="chart-wrap"><h3>أداء المواد</h3><div class="chart-bars">${subjectStats.map(x=>`<div class="chart-col"><div class="chart-bar" style="height:${Math.max(4,x.avg*1.7)}px"><span>${x.avg}%</span></div><div class="chart-label">${x.n}<br><small>${x.attempts} محاولة</small></div></div>`).join('')}</div></div>
-    <div class="form-grid">
-      <div class="panel" style="margin:0;border:1px solid #f0dfe9"><h3>🎯 أولويات التحسين</h3>${weak.length?weak.map(d=>`<div class="notice"><b>${names[d.sub]} — ${escapeHtml(d.domain)}</b><br><span>${d.avg}% · ${status(d.avg)}</span></div>`).join(''):'<div class="empty">ستظهر الأولويات بعد تنفيذ التدريبات.</div>'}</div>
-      <div class="panel" style="margin:0;border:1px solid #e3eee6"><h3>🌟 أبرز مجالات القوة</h3>${strong.length?strong.map(d=>`<div class="notice"><b>${names[d.sub]} — ${escapeHtml(d.domain)}</b><br><span>${d.avg}%</span></div>`).join(''):'<div class="empty">لا توجد بيانات مجالات كافية بعد.</div>'}</div>
-    </div>`;
+async function renderTeacher(){
+  applyTeacherSubjectLock();
+  if(cloudReady){try{await withTimeout(loadCloudAdminResults(),10000);}catch(e){console.warn('dashboard results timeout:',e);}}
+  const studentCount=cloudReady?cloudStudentProfiles.length:Object.keys(results).length;
+  document.getElementById('tStudents').textContent=studentCount;
+  document.getElementById('tQuestions').textContent=questions.length;
+  let attempts=0,sum=0,count=0;
+  if(cloudReady){cloudAttempts.forEach(a=>{attempts++;sum+=Number(a.score)||0;count++;});}
+  else Object.keys(results).forEach(n=>['reading','science','math'].forEach(ss=>{let x=results[n][ss];if(x?.attempts){attempts+=x.attempts;sum+=x.score;count++;}}));
+  document.getElementById('tAttempts').textContent=attempts;
+  document.getElementById('tAverage').textContent=(count?Math.round(sum/count):0)+'%';
+  renderResultsTable();applyTeacherSubjectLock();updateSkillOptions();toggleQuestionBuilder();renderBank();
+  if(typeof populateReportStudents==='function')populateReportStudents();
 }
 
 const _renderResultsTableBase=renderResultsTable;
