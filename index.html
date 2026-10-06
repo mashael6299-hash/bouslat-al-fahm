@@ -328,6 +328,13 @@ async function loginStudent(){
   if(!n){alert('فضلاً اكتبي اسم الطالبة');return}
   if(!c){alert('فضلاً اختاري الصف');return}
   try{
+    // منع بقاء جلسة معلمة/مشرفة على جهاز الطالبة قبل إنشاء الجلسة المجهولة.
+    const currentSessionResult=await withTimeout(supabaseClient.auth.getSession(),8000);
+    const currentSession=currentSessionResult?.data?.session;
+    if(currentSession && !currentSession.user?.is_anonymous){
+      await withTimeout(supabaseClient.auth.signOut(),8000);
+      cloudProfile=null; cloudReady=false;
+    }
     await loadCloudClasses();
     const classRow=(window.cloudClasses||[]).find(x=>String(x.name||x.title||x.class_name||'')===c);
     if(!classRow){alert('تعذر العثور على الفصل في قاعدة البيانات.');return}
@@ -336,7 +343,14 @@ async function loginStudent(){
     studentAuthUser=data.user;
     const {data:profile,error:pe}=await supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',data.user.id).maybeSingle();
     if(pe || !profile){alert('تم إنشاء الدخول لكن لم يتم إنشاء ملف الطالبة في قاعدة البيانات.');return}
+    if(profile.role!=='student'){
+      await supabaseClient.auth.signOut();
+      studentAuthUser=null; studentCloudProfile=null;
+      alert('لم يتم التعرف على هذه الجلسة كحساب طالبة.');
+      return;
+    }
     studentCloudProfile=profile;
+    cloudProfile=null; cloudReady=false;
     student={name:profile.full_name||n,class:c,id:profile.id};
     results[student.name]=results[student.name]||{class:c,reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0}};
     localStorage.setItem('bf_student',JSON.stringify(student));
@@ -398,31 +412,64 @@ async function loginTeacher(){
   const password=document.getElementById('teacherPassword').value;
   const msg=document.getElementById('teacherLoginMsg');
   if(!email||!password){msg.innerHTML='<div class="notice">أدخلي البريد الإلكتروني وكلمة المرور.</div>';return}
-  msg.innerHTML='<div class="notice">⏳ جارٍ التحقق من الحساب والاتصال بقاعدة البيانات...</div>';
+  msg.innerHTML='<div class="notice">⏳ جارٍ الاتصال بخدمة الحسابات...</div>';
   try{
-    const result=await withTimeout(supabaseClient.auth.signInWithPassword({email,password}),15000);
-    const {data,error}=result||{};
-    if(error){
-      msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+(error.message||'تحققي من البريد وكلمة المرور.')+'</div>';
+    if(!navigator.onLine){throw new Error('لا يوجد اتصال بالإنترنت في الجهاز.')}
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),12000);
+    let authResponse;
+    try{
+      authResponse=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','apikey':SUPABASE_PUBLISHABLE_KEY},
+        body:JSON.stringify({email,password}),
+        signal:controller.signal
+      });
+    }finally{clearTimeout(timer)}
+    let authJson={};
+    try{authJson=await authResponse.json()}catch(e){}
+    if(!authResponse.ok){
+      const err=authJson?.error_description||authJson?.msg||authJson?.message||'تعذر تسجيل الدخول.';
+      msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+err+'</div>';
       return;
     }
-    if(!data?.user){
-      msg.innerHTML='<div class="notice" style="color:#b42318">تعذر التحقق من الحساب. حاولي مرة أخرى.</div>';
+    if(!authJson?.access_token||!authJson?.refresh_token||!authJson?.user){
+      msg.innerHTML='<div class="notice" style="color:#b42318">لم تُرجع خدمة الحساب جلسة دخول صالحة.</div>';
       return;
     }
-    const pr=await withTimeout(supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',data.user.id).maybeSingle(),10000);
-    const {data:profile,error:pe}=pr||{};
-    if(pe||!profile){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">تم تسجيل الدخول لكن لم يتم العثور على ملف الصلاحيات.</div>';return}
-    if(!['admin','teacher'].includes(profile.role)){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">هذا الحساب ليس حساب معلمة أو مشرفة.</div>';return}
+    msg.innerHTML='<div class="notice">⏳ تم التحقق من الحساب، جارٍ تحميل الصلاحيات...</div>';
+    const sessionResult=await withTimeout(
+      supabaseClient.auth.setSession({access_token:authJson.access_token,refresh_token:authJson.refresh_token}),
+      10000
+    );
+    if(sessionResult?.error) throw sessionResult.error;
+    const profileResult=await withTimeout(
+      supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',authJson.user.id).maybeSingle(),
+      10000
+    );
+    const {data:profile,error:pe}=profileResult||{};
+    if(pe||!profile){
+      await supabaseClient.auth.signOut();
+      msg.innerHTML='<div class="notice" style="color:#b42318">تم تسجيل الدخول، لكن لم يتم العثور على ملف الصلاحيات في جدول profiles.</div>';
+      return;
+    }
+    if(!['admin','teacher'].includes(profile.role)){
+      await supabaseClient.auth.signOut();
+      msg.innerHTML='<div class="notice" style="color:#b42318">هذا الحساب ليس حساب معلمة أو مشرفة.</div>';
+      return;
+    }
     cloudProfile=profile; cloudReady=true;
+    msg.innerHTML='<div class="notice">⏳ جارٍ تحميل بيانات لوحة التحكم...</div>';
     await loadCloudReferenceData();
     await loadCloudQuestions();
     show('teacher');
   }catch(e){
     console.error('teacher login:',e);
-    const message=e?.message==='TIMEOUT'
-      ? 'انتهت مهلة الاتصال بخدمة Supabase. تأكدي من اتصال الإنترنت ثم أعيدي المحاولة.'
-      : (e?.message||'تعذر الاتصال بخدمة تسجيل الدخول.');
+    const message=e?.name==='AbortError'
+      ? 'انتهت مهلة الاتصال بـ Supabase. إذا كان الإنترنت يعمل، افتحي Supabase وتحققي من أن المشروع يعمل ثم أعيدي المحاولة.'
+      : (e?.message==='TIMEOUT'
+        ? 'استغرق تحميل الصلاحيات وقتًا أطول من المتوقع. أعيدي المحاولة.'
+        : (e?.message||'تعذر الاتصال بخدمة تسجيل الدخول.'));
     msg.innerHTML='<div class="notice" style="color:#b42318">'+message+'</div>';
   }
 }
@@ -484,7 +531,7 @@ async function deleteCloudQuestion(id){
 
 
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='student')renderStudent();if(id==='teacher'){if(!cloudReady){show('teacherLogin');return}renderTeacher()}}
-function loginStudent(){let n=document.getElementById('studentName').value.trim(),c=document.getElementById('studentClass').value;if(!n){alert('فضلاً اكتبي اسم الطالبة');return}if(!c){alert('فضلاً اختاري الصف');return}student={name:n,class:c||'غير محدد'};if(!results[n])results[n]={class:student.class,reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0}};localStorage.setItem('bf_student',JSON.stringify(student));localStorage.setItem('bf_results',JSON.stringify(results));show('student')}
+// تم حذف نسخة تسجيل الطالبة المحلية المكررة؛ تُستخدم نسخة Supabase أعلاه فقط.
 function renderStudent(){if(!student)return show('studentLogin');document.getElementById('displayName').textContent=student.name;let r=results[student.name]||{};let vals=['reading','science','math'].map(x=>r[x]?.score||0);document.getElementById('avg').textContent=Math.round(vals.reduce((a,b)=>a+b,0)/3)+'%';document.getElementById('done').textContent=Object.values(r).filter(x=>x&&x.attempts).reduce((a,b)=>a+(b.attempts||0),0);document.getElementById('points').textContent=Object.values(r).filter(x=>x&&x.attempts).reduce((a,b)=>a+(b.score||0),0);['reading','science','math'].forEach(x=>document.getElementById(x+'Prog').style.width=(r[x]?.score||0)+'%');let b=[];if(vals.some(v=>v>=70))b.push('🌟 بداية موفقة');if(vals.some(v=>v>=90))b.push('🏅 متفوقة');if(vals.every(v=>v>=80))b.push('🧭 سفيرة الفهم');document.getElementById('badges').textContent=b.length;renderStudentWeekly();document.getElementById('studentBadges').innerHTML=b.map(x=>`<span class="badge">${x}</span>`).join('')||'<span style="color:#777">أكملي أول تدريب لتحصلي على أول شارة.</span>'}
 function startQuiz(sub){
 currentSubject=sub;
