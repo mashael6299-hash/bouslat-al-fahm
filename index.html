@@ -359,6 +359,15 @@ async function loginStudent(){
     show('student');
   }catch(e){console.error(e);alert('حدث خطأ أثناء دخول الطالبة.');}
 }
+function normalizeAttemptPercent(score,total){
+  const n=Number(score);
+  const t=Number(total);
+  if(!Number.isFinite(n) || n<0) return 0;
+  if(t>0 && n<=t) return Math.max(0,Math.min(100,Math.round(n/t*100)));
+  if(n<=100) return Math.max(0,Math.min(100,Math.round(n)));
+  if(n<=10000) return Math.max(0,Math.min(100,Math.round(n/100)));
+  return 100;
+}
 async function loadStudentCloudResults(){
   if(!studentAuthUser)return;
   try{
@@ -368,8 +377,7 @@ async function loadStudentCloudResults(){
     (data||[]).forEach(a=>{
       const sub=subjectKeyFromId(a.subject_id)||a.subject||a.subject_key;
       if(!['reading','science','math'].includes(sub))return;
-      const pct=Number(a.score ?? a.percentage ?? 0);
-      const total=Number(a.total_questions ?? a.total ?? 0);
+      const pct=normalizeAttemptPercent(a.score ?? a.percentage ?? 0,a.total_questions ?? a.total ?? 0);
       const x=r[sub]||{score:0,attempts:0};
       x.score=Math.max(x.score,pct); x.attempts=(x.attempts||0)+1; r[sub]=x;
     });
@@ -549,7 +557,26 @@ async function deleteCloudQuestion(id){
 
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='student')renderStudent();if(id==='teacher'){if(!cloudReady){show('teacherLogin');return}renderTeacher()}}
 // تم حذف نسخة تسجيل الطالبة المحلية المكررة؛ تُستخدم نسخة Supabase أعلاه فقط.
-function renderStudent(){if(!student)return show('studentLogin');document.getElementById('displayName').textContent=student.name;let r=results[student.name]||{};let vals=['reading','science','math'].map(x=>r[x]?.score||0);document.getElementById('avg').textContent=Math.round(vals.reduce((a,b)=>a+b,0)/3)+'%';document.getElementById('done').textContent=Object.values(r).filter(x=>x&&x.attempts).reduce((a,b)=>a+(b.attempts||0),0);document.getElementById('points').textContent=Object.values(r).filter(x=>x&&x.attempts).reduce((a,b)=>a+(b.score||0),0);['reading','science','math'].forEach(x=>document.getElementById(x+'Prog').style.width=(r[x]?.score||0)+'%');let b=[];if(vals.some(v=>v>=70))b.push('🌟 بداية موفقة');if(vals.some(v=>v>=90))b.push('🏅 متفوقة');if(vals.every(v=>v>=80))b.push('🧭 سفيرة الفهم');document.getElementById('badges').textContent=b.length;renderStudentWeekly();document.getElementById('studentBadges').innerHTML=b.map(x=>`<span class="badge">${x}</span>`).join('')||'<span style="color:#777">أكملي أول تدريب لتحصلي على أول شارة.</span>'}
+function renderStudent(){
+  if(!student)return show('studentLogin');
+  document.getElementById('displayName').textContent=student.name;
+  const r=results[student.name]||{};
+  const subjects=['reading','science','math'];
+  const vals=subjects.map(x=>Math.max(0,Math.min(100,Number(r[x]?.score)||0)));
+  const active=subjects.map(x=>r[x]).filter(x=>x&&x.attempts);
+  const avg=active.length?Math.round(vals.reduce((sum,v)=>sum+v,0)/active.length):0;
+  document.getElementById('avg').textContent=avg+'%';
+  document.getElementById('done').textContent=active.reduce((sum,x)=>sum+(Number(x.attempts)||0),0);
+  document.getElementById('points').textContent=active.reduce((sum,x)=>sum+Math.max(0,Math.min(100,Number(x.score)||0)),0);
+  subjects.forEach(x=>document.getElementById(x+'Prog').style.width=Math.max(0,Math.min(100,Number(r[x]?.score)||0))+'%');
+  let b=[];
+  if(vals.some(v=>v>=70))b.push('🌟 بداية موفقة');
+  if(vals.some(v=>v>=90))b.push('🏅 متفوقة');
+  if(active.length===3 && vals.every(v=>v>=80))b.push('🧭 سفيرة الفهم');
+  document.getElementById('badges').textContent=b.length;
+  renderStudentWeekly();
+  document.getElementById('studentBadges').innerHTML=b.map(x=>`<span class="badge">${x}</span>`).join('')||'<span style="color:#777">أكملي أول تدريب لتحصلي على أول شارة.</span>';
+}
 function startQuiz(sub){
 currentSubject=sub;
 if(sub==='reading'){
