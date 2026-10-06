@@ -456,7 +456,7 @@ function mapCloudQuestion(x){
   const options=Array.isArray(x.options)?x.options:(Array.isArray(x.o)?x.o:[x.option_a,x.option_b,x.option_c,x.option_d].map(v=>String(v??'')));
   const letterMap={A:0,B:1,C:2,D:3};
   const answerIndex=Number.isInteger(Number(x.correct_index))?Number(x.correct_index):(letterMap[String(x.correct_answer||'').trim().toUpperCase()]??0);
-  return {id:x.id,subject,subject_id:x.subject_id||null,skill:x.skill||x.domain||x.domain_name||domainNameById(x.domain_id)||x.domain_id,q:x.question_text||x.question||x.q,o:options,a:answerIndex,difficulty:x.difficulty||'متوسط',trainingType:x.training_type||x.trainingType||'independent',passage:x.passage||null,created_by:x.created_by,is_published:x.is_published??x.published??false};
+  return {id:x.id,subject,subject_id:x.subject_id||null,skill:x.skill||x.domain||x.domain_name||domainNameById(x.domain_id)||x.domain_id,q:x.question_text||x.question||x.q,o:options,a:answerIndex,difficulty:x.difficulty||'متوسط',trainingType:(x.training_type==='قطعة وأسئلة'||x.training_type==='passage')?'passage':'independent',passage:x.passage||null,created_by:x.created_by,is_published:x.is_published??x.published??false};
 }
 function currentTeacherSubject(){
   if(cloudProfile?.role!=='teacher') return null;
@@ -509,7 +509,7 @@ async function insertCloudQuestion(q){
     is_published:false,
     subject_id:subjectRow.id,
     domain_id:domainRow.id,
-    training_type:q.trainingType || 'independent'
+    training_type:(q.trainingType==='passage'?'قطعة وأسئلة':'أسئلة مستقلة')
   };
   if(q.passage) payload.passage=q.passage;
   const {data,error}=await supabaseClient.from('questions').insert(payload).select('*').single();
