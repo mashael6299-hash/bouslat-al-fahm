@@ -491,10 +491,17 @@ async function insertCloudQuestion(q){
     const box=document.getElementById('saveMsg'); if(box) box.innerHTML='<div class="notice" style="color:#b42318">❌ '+msg+' تأكدي من اختيار المجال الصحيح.</div>';
     return false;
   }
+  const optionTexts=Array.isArray(q.o)?q.o.map(v=>String(v??'')):[];
+  const correctIndex=Math.max(0,Math.min(Number(q.a)||0,3));
   const payload={
     question_text:q.q,
-    options:q.o,
-    correct_index:q.a,
+    option_a:optionTexts[0]||'',
+    option_b:optionTexts[1]||'',
+    option_c:optionTexts[2]||'',
+    option_d:optionTexts[3]||'',
+    options:optionTexts,
+    correct_answer:optionTexts[correctIndex]||'',
+    correct_index:correctIndex,
     difficulty:q.difficulty || 'متوسط',
     created_by:cloudProfile.id,
     is_published:false,
