@@ -1806,3 +1806,476 @@ async function viewStudentLatestAttempt(studentId,subjectKey){
 }
 
 </script>
+<script>
+// ===== إصلاح استمرارية جلسة الطالبة وحفظ النتائج بعد الخروج وإعادة الدخول =====
+// الهدف: الاحتفاظ بنفس Anonymous user للطالبة نفسها عند الخروج ثم العودة،
+// وإعادة بناء النقاط من attempts -> tasks -> subject بدل الاعتماد على subject_id داخل attempts.
+
+async function loadStudentCloudResults(){
+  if(!studentAuthUser?.id) return false;
+  try{
+    if(!cloudSubjects.length) await loadCloudReferenceData();
+
+    const {data:attempts,error}=await withTimeout(
+      supabaseClient
+        .from('attempts')
+        .select('id,task_id,score,total,started_at,completed_at')
+        .eq('student_id',studentAuthUser.id)
+        .order('completed_at',{ascending:false}),
+      10000
+    );
+    if(error) throw error;
+
+    const list=Array.isArray(attempts)?attempts:[];
+    const taskIds=[...new Set(list.map(a=>Number(a.task_id)).filter(Number.isFinite))];
+    let tasks=[];
+    if(taskIds.length){
+      const tr=await withTimeout(
+        supabaseClient
+          .from('tasks')
+          .select('id,subject_id,title,is_published,published_at,stopped_at')
+          .in('id',taskIds),
+        10000
+      );
+      if(tr.error) throw tr.error;
+      tasks=Array.isArray(tr.data)?tr.data:[];
+    }
+
+    const taskMap={};
+    tasks.forEach(t=>taskMap[String(t.id)]=t);
+
+    const r={
+      class:student?.class||studentCloudProfile?.class_id||'غير محدد',
+      reading:{score:0,attempts:0},
+      science:{score:0,attempts:0},
+      math:{score:0,attempts:0},
+      domains:{},
+      attemptHistory:[]
+    };
+
+    list.forEach(a=>{
+      const t=taskMap[String(a.task_id)];
+      if(!t) return;
+      const sub=subjectKeyFromId(t.subject_id);
+      if(!['reading','science','math'].includes(sub)) return;
+      const pct=pctFromAttempt(a);
+      const x=r[sub]||{score:0,attempts:0};
+      x.score=Math.max(Number(x.score)||0,pct);
+      x.attempts=(Number(x.attempts)||0)+1;
+      x.last=pct;
+      r[sub]=x;
+      r.attemptHistory.push({
+        attemptId:a.id,
+        taskId:a.task_id,
+        subject:sub,
+        score:pct,
+        total:Number(a.total)||0,
+        completedAt:a.completed_at||a.started_at||null,
+        title:t.title||names[sub]
+      });
+    });
+
+    // لا نستبدل نتيجة محلية سليمة ببيانات فارغة إذا لم توجد محاولات سحابية.
+    const hasCloudAttempts=r.attemptHistory.length>0;
+    if(student?.name && (hasCloudAttempts || !results[student.name])){
+      results[student.name]=r;
+      localStorage.setItem('bf_results',JSON.stringify(results));
+    }
+    return true;
+  }catch(e){
+    console.warn('loadStudentCloudResults:',e);
+    return false;
+  }
+}
+
+async function getCurrentAnonymousStudentProfile(){
+  try{
+    const gs=await withTimeout(supabaseClient.auth.getSession(),8000);
+    const session=gs?.data?.session;
+    if(!session?.user?.is_anonymous) return null;
+    const pr=await withTimeout(
+      supabaseClient
+        .from('profiles')
+        .select('id,full_name,role,class_id,subject_id')
+        .eq('id',session.user.id)
+        .maybeSingle(),
+      8000
+    );
+    if(pr.error || !pr.data || pr.data.role!=='student') return null;
+    return {session,profile:pr.data};
+  }catch(e){
+    return null;
+  }
+}
+
+async function loginStudent(){
+  const n=document.getElementById('studentName').value.trim();
+  const c=document.getElementById('studentClass').value;
+  if(!n){alert('فضلاً اكتبي اسم الطالبة');return}
+  if(!c){alert('فضلاً اختاري الصف');return}
+
+  try{
+    await loadCloudClasses();
+    const classRow=(window.cloudClasses||[]).find(x=>String(x.name||x.title||x.class_name||'')===c);
+    if(!classRow){alert('تعذر العثور على الفصل في قاعدة البيانات.');return}
+
+    // 1) إعادة استخدام الجلسة المجهولة نفسها للطالبة إذا كانت مطابقة.
+    let reusable=await getCurrentAnonymousStudentProfile();
+    if(reusable){
+      const sameName=String(reusable.profile.full_name||'').trim()===n;
+      const sameClass=String(reusable.profile.class_id)===String(classRow.id);
+      if(sameName && sameClass){
+        studentAuthUser=reusable.session.user;
+        studentCloudProfile=reusable.profile;
+        student={name:n,class:c,id:studentAuthUser.id};
+        localStorage.setItem('bf_student',JSON.stringify(student));
+        await loadStudentCloudResults();
+        show('student');
+        return;
+      }
+
+      // يوجد طالب آخر على نفس الجهاز: عندها فقط ننهي الجلسة وننشئ جلسة جديدة.
+      try{await withTimeout(supabaseClient.auth.signOut(),8000);}catch(e){}
+      studentAuthUser=null;
+      studentCloudProfile=null;
+    }
+
+    // 2) إنشاء جلسة مجهولة جديدة عند الحاجة فقط.
+    const {data,error}=await supabaseClient.auth.signInAnonymously({
+      options:{data:{full_name:n,role:'student',class_id:classRow.id}}
+    });
+    if(error){
+      console.warn(error);
+      alert('تعذر إنشاء دخول الطالبة. تأكدي من تفعيل Anonymous Sign-Ins في Supabase.');
+      return;
+    }
+
+    studentAuthUser=data.user;
+    const {data:profile,error:pe}=await supabaseClient
+      .from('profiles')
+      .select('id,full_name,role,class_id,subject_id')
+      .eq('id',data.user.id)
+      .maybeSingle();
+    if(pe || !profile){
+      alert('تم إنشاء الدخول لكن لم يتم إنشاء ملف الطالبة في قاعدة البيانات.');
+      return;
+    }
+    if(profile.role!=='student'){
+      await supabaseClient.auth.signOut();
+      studentAuthUser=null;
+      studentCloudProfile=null;
+      alert('لم يتم التعرف على هذه الجلسة كحساب طالبة.');
+      return;
+    }
+
+    studentCloudProfile=profile;
+    cloudProfile=null;
+    cloudReady=false;
+    student={name:profile.full_name||n,class:c,id:profile.id};
+    localStorage.setItem('bf_student',JSON.stringify(student));
+
+    if(!results[student.name]){
+      results[student.name]={
+        class:c,
+        reading:{score:0,attempts:0},
+        science:{score:0,attempts:0},
+        math:{score:0,attempts:0},
+        domains:{},
+        attemptHistory:[]
+      };
+      localStorage.setItem('bf_results',JSON.stringify(results));
+    }
+
+    await loadStudentCloudResults();
+    show('student');
+  }catch(e){
+    console.error('loginStudent:',e);
+    alert(e?.message||'حدث خطأ أثناء دخول الطالبة.');
+  }
+}
+
+// الخروج من الرحلة لا يعني حذف هوية الطالبة من Supabase.
+// نحتفظ بالجلسة المجهولة نفسها حتى تبقى النقاط والمحاولات مرتبطة بها.
+async function logoutStudent(){
+  try{
+    currentTaskId=null;
+    currentTaskSubjectId=null;
+    currentQuiz=[];
+    currentIndex=0;
+    currentScore=0;
+    window.currentAnswerRows=[];
+    window.quizDomainScores={};
+    student=null;
+    studentCloudProfile=null;
+    localStorage.removeItem('bf_student');
+    show('home');
+  }catch(e){
+    show('home');
+  }
+}
+
+// عند فتح لوحة الطالبة بعد الدخول، احضري النتائج السحابية قبل العرض.
+const __originalRenderStudent=renderStudent;
+renderStudent=function(){
+  __originalRenderStudent();
+};
+
+// تعزيز قفل التدريب بعد الخروج والعودة: نفس anonymous uid + نفس مجموعة الأسئلة.
+const __originalStartQuiz=startQuiz;
+startQuiz=async function(sub){
+  if(!studentAuthUser){
+    const ok=await ensureStudentSession();
+    if(!ok){alert('جلسة الطالبة غير فعالة. أعيدي الدخول إلى الرحلة.');return;}
+  }
+  return __originalStartQuiz(sub);
+};
+
+// بعد أي تنقل إلى رحلة الطالبة، أعيدي جلب النتائج من Supabase دون تصفيرها.
+const __originalShow=show;
+show=async function(id){
+  __originalShow(id);
+  if(id==='student' && studentAuthUser){
+    await loadStudentCloudResults();
+    try{__originalRenderStudent();}catch(e){}
+  }
+};
+</script>
+
+<script>
+// ===== إصلاح نهائي: استمرارية الطالبة + حفظ النتائج سحابيًا + قفل التدريب =====
+
+async function loadStudentCloudResults(){
+  if(!studentAuthUser?.id) return false;
+  try{
+    if(!cloudSubjects.length) await loadCloudReferenceData();
+    const resp=await withTimeout(
+      supabaseClient.from('attempts')
+        .select('id,task_id,score,total,started_at,completed_at')
+        .eq('student_id',studentAuthUser.id)
+        .order('completed_at',{ascending:false}),
+      10000
+    );
+    if(resp.error) throw resp.error;
+    const attempts=Array.isArray(resp.data)?resp.data:[];
+    const taskIds=[...new Set(attempts.map(a=>Number(a.task_id)).filter(Number.isFinite))];
+    let tasks=[];
+    if(taskIds.length){
+      const tr=await withTimeout(
+        supabaseClient.from('tasks')
+          .select('id,subject_id,title,is_published,published_at,stopped_at')
+          .in('id',taskIds),
+        10000
+      );
+      if(tr.error) throw tr.error;
+      tasks=Array.isArray(tr.data)?tr.data:[];
+    }
+    const taskMap={}; tasks.forEach(t=>taskMap[String(t.id)]=t);
+    const r={
+      class:student?.class||'غير محدد',
+      reading:{score:0,attempts:0},
+      science:{score:0,attempts:0},
+      math:{score:0,attempts:0},
+      domains:{},
+      attemptHistory:[]
+    };
+    attempts.forEach(a=>{
+      const t=taskMap[String(a.task_id)]; if(!t) return;
+      const sub=subjectKeyFromId(t.subject_id); if(!['reading','science','math'].includes(sub)) return;
+      const pct=pctFromAttempt(a);
+      const x=r[sub]||{score:0,attempts:0};
+      x.score=Math.max(Number(x.score)||0,pct);
+      x.attempts=(Number(x.attempts)||0)+1;
+      x.last=pct;
+      r[sub]=x;
+      r.attemptHistory.push({
+        attemptId:a.id,taskId:a.task_id,subject:sub,score:pct,
+        total:Number(a.total)||0,completedAt:a.completed_at||a.started_at||null,
+        title:t.title||names[sub]
+      });
+    });
+    if(student?.name){
+      results[student.name]=r;
+      localStorage.setItem('bf_results',JSON.stringify(results));
+    }
+    return true;
+  }catch(e){
+    console.warn('loadStudentCloudResults:',e);
+    return false;
+  }
+}
+
+async function getReusableAnonymousStudent(){
+  try{
+    const gs=await withTimeout(supabaseClient.auth.getSession(),8000);
+    const session=gs?.data?.session;
+    if(!session?.user?.is_anonymous) return null;
+    const pr=await withTimeout(
+      supabaseClient.from('profiles')
+        .select('id,full_name,role,class_id,subject_id')
+        .eq('id',session.user.id).maybeSingle(),
+      8000
+    );
+    if(pr.error || !pr.data || pr.data.role!=='student') return null;
+    return {session,profile:pr.data};
+  }catch(e){ return null; }
+}
+
+async function loginStudent(){
+  const n=document.getElementById('studentName').value.trim();
+  const c=document.getElementById('studentClass').value;
+  if(!n){alert('فضلاً اكتبي اسم الطالبة');return;}
+  if(!c){alert('فضلاً اختاري الصف');return;}
+  try{
+    await loadCloudClasses();
+    const classRow=(window.cloudClasses||[]).find(x=>String(x.name||x.title||x.class_name||'')===c);
+    if(!classRow){alert('تعذر العثور على الفصل في قاعدة البيانات.');return;}
+
+    const reusable=await getReusableAnonymousStudent();
+    if(reusable){
+      const sameName=String(reusable.profile.full_name||'').trim()===n;
+      const sameClass=String(reusable.profile.class_id)===String(classRow.id);
+      if(sameName && sameClass){
+        studentAuthUser=reusable.session.user;
+        studentCloudProfile=reusable.profile;
+        student={name:n,class:c,id:studentAuthUser.id};
+        localStorage.setItem('bf_student',JSON.stringify(student));
+        await loadStudentCloudResults();
+        show('student');
+        return;
+      }
+      // جهاز مشترك: انتقلي لطالبة أخرى بجلسة جديدة.
+      try{await withTimeout(supabaseClient.auth.signOut(),8000);}catch(e){}
+      studentAuthUser=null; studentCloudProfile=null;
+    }
+
+    const {data,error}=await supabaseClient.auth.signInAnonymously({
+      options:{data:{full_name:n,role:'student',class_id:classRow.id}}
+    });
+    if(error){
+      alert('تعذر إنشاء دخول الطالبة. تأكدي من تفعيل Anonymous Sign-Ins في Supabase.');
+      return;
+    }
+    studentAuthUser=data.user;
+    const {data:profile,error:pe}=await supabaseClient.from('profiles')
+      .select('id,full_name,role,class_id,subject_id')
+      .eq('id',data.user.id).maybeSingle();
+    if(pe || !profile){alert('تم إنشاء الدخول لكن لم يتم إنشاء ملف الطالبة في قاعدة البيانات.');return;}
+    if(profile.role!=='student'){
+      await supabaseClient.auth.signOut();
+      studentAuthUser=null; studentCloudProfile=null;
+      alert('لم يتم التعرف على هذه الجلسة كحساب طالبة.');
+      return;
+    }
+    studentCloudProfile=profile;
+    cloudProfile=null; cloudReady=false;
+    student={name:profile.full_name||n,class:c,id:profile.id};
+    localStorage.setItem('bf_student',JSON.stringify(student));
+    if(!results[student.name]){
+      results[student.name]={class:c,reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0},domains:{},attemptHistory:[]};
+      localStorage.setItem('bf_results',JSON.stringify(results));
+    }
+    await loadStudentCloudResults();
+    show('student');
+  }catch(e){
+    console.error('loginStudent:',e);
+    alert(e?.message||'حدث خطأ أثناء دخول الطالبة.');
+  }
+}
+
+async function logoutStudent(){
+  // خروج واجهة فقط، مع الإبقاء على Anonymous session حتى تبقى النتائج والقفل مرتبطين بالطالبة نفسها.
+  try{
+    currentTaskId=null;
+    currentTaskSubjectId=null;
+    currentQuiz=[];
+    currentIndex=0;
+    currentScore=0;
+    window.currentAnswerRows=[];
+    window.quizDomainScores={};
+    student=null;
+    studentCloudProfile=null;
+    localStorage.removeItem('bf_student');
+    show('home');
+  }catch(e){ show('home'); }
+}
+
+// ربط فتح التدريب مباشرة بالتدريب المنشور (tasks -> task_questions).
+async function startQuiz(sub){
+  currentSubject=sub;
+  try{
+    const ok=await ensureStudentSession();
+    if(!ok){alert('جلسة الطالبة غير فعالة. أعيدي الدخول إلى الرحلة.');return;}
+    await loadCloudReferenceData();
+
+    const active=await getActiveTaskForSubject(sub);
+    const task=active?.task, subjectRow=active?.subjectRow;
+    if(!task){alert('لا توجد أسئلة منشورة في هذا القسم حاليًا.');return;}
+
+    const tq=await withTimeout(
+      supabaseClient.from('task_questions')
+        .select('question_id,question_order')
+        .eq('task_id',task.id)
+        .order('question_order',{ascending:true}),
+      10000
+    );
+    if(tq.error) throw tq.error;
+    const qids=(tq.data||[]).map(x=>Number(x.question_id)).filter(Number.isFinite);
+    if(!qids.length){alert('لا توجد أسئلة مرتبطة بهذا التدريب حاليًا.');return;}
+
+    const qr=await withTimeout(supabaseClient.from('questions').select('*').in('id',qids),10000);
+    if(qr.error) throw qr.error;
+    const map={}; (qr.data||[]).forEach(x=>map[String(x.id)]=mapCloudQuestion(x));
+    const published=qids.map(id=>map[String(id)]).filter(Boolean).filter(q=>q.subject===sub);
+    if(!published.length){alert('لا توجد أسئلة صالحة لهذا التدريب.');return;}
+
+    const already=await findCompletedAttemptForTask(task.id);
+    if(already){
+      const when=already.completed_at?new Date(already.completed_at).toLocaleString('ar-SA'):'';
+      alert('🔒 تم حل هذا التدريب مسبقًا. لا يمكنك الدخول إليه مرة أخرى حتى توقف المعلمة التدريب الحالي وتنشر تدريبًا جديدًا.'+(when?'\n\nآخر محاولة: '+when:'')+'\n\nالنتيجة السابقة: '+pctFromAttempt(already)+'%');
+      return;
+    }
+
+    currentTaskId=task.id;
+    currentTaskSubjectId=subjectRow?.id||null;
+    currentQuiz=published;
+    questions=published;
+    localStorage.setItem('bf_questions',JSON.stringify(questions));
+    currentIndex=0; currentScore=0;
+    window.quizDomainScores={}; window.currentAnswerRows=[];
+    currentQuizStartedAt=new Date().toISOString();
+    document.getElementById('quizTitle').textContent=names[sub];
+    document.getElementById('quizHint').textContent='اختاري الإجابة الأنسب، وبعد الإجابة ستنتقلين للسؤال التالي.';
+    show('quiz'); renderQuestion();
+  }catch(e){
+    console.error('startQuiz student:',e);
+    alert(e?.message||'تعذر فتح التدريب.');
+  }
+}
+
+// نقاط الطالبة = مجموع درجات التدريبات التي أغلقتها بنجاح، وتبقى محفوظة من السحابة.
+window.__bfRenderStudentBase = renderStudent;
+renderStudent=function(){
+  window.__bfRenderStudentBase();
+  if(!student) return;
+  const r=results[student.name]||{};
+  const history=Array.isArray(r.attemptHistory)?r.attemptHistory:[];
+  if(history.length){
+    const points=history.reduce((s,a)=>s+Math.max(0,Math.min(100,Number(a.score)||0)),0);
+    const avg=Math.round(points/history.length);
+    const done=history.length;
+    document.getElementById('points').textContent=points;
+    document.getElementById('done').textContent=done;
+    document.getElementById('avg').textContent=avg+'%';
+  }
+};
+
+// بعد العودة للواجهة الرئيسية/رحلتي، لا نُصفّر النتائج.
+window.__bfShowBase = show;
+show=async function(id){
+  window.__bfShowBase(id);
+  if(id==='student' && studentAuthUser){
+    await loadStudentCloudResults();
+    try{renderStudent();}catch(e){}
+  }
+};
+</script>
