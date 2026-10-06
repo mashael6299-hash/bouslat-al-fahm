@@ -412,40 +412,35 @@ async function loginTeacher(){
   const password=document.getElementById('teacherPassword').value;
   const msg=document.getElementById('teacherLoginMsg');
   if(!email||!password){msg.innerHTML='<div class="notice">أدخلي البريد الإلكتروني وكلمة المرور.</div>';return}
-  msg.innerHTML='<div class="notice">⏳ جارٍ الاتصال بخدمة الحسابات...</div>';
+  msg.innerHTML='<div class="notice">⏳ جارٍ التحقق من الحساب...</div>';
   try{
-    if(!navigator.onLine){throw new Error('لا يوجد اتصال بالإنترنت في الجهاز.')}
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),12000);
-    let authResponse;
-    try{
-      authResponse=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','apikey':SUPABASE_PUBLISHABLE_KEY},
-        body:JSON.stringify({email,password}),
-        signal:controller.signal
-      });
-    }finally{clearTimeout(timer)}
-    let authJson={};
-    try{authJson=await authResponse.json()}catch(e){}
-    if(!authResponse.ok){
-      const err=authJson?.error_description||authJson?.msg||authJson?.message||'تعذر تسجيل الدخول.';
-      msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+err+'</div>';
-      return;
-    }
-    if(!authJson?.access_token||!authJson?.refresh_token||!authJson?.user){
-      msg.innerHTML='<div class="notice" style="color:#b42318">لم تُرجع خدمة الحساب جلسة دخول صالحة.</div>';
-      return;
-    }
-    msg.innerHTML='<div class="notice">⏳ تم التحقق من الحساب، جارٍ تحميل الصلاحيات...</div>';
-    const sessionResult=await withTimeout(
-      supabaseClient.auth.setSession({access_token:authJson.access_token,refresh_token:authJson.refresh_token}),
-      10000
+    if(!navigator.onLine) throw new Error('لا يوجد اتصال بالإنترنت في الجهاز.');
+
+    // إنهاء أي جلسة طالبة/حساب قديمة قبل بدء جلسة المشرفة أو المعلمة.
+    try{ await withTimeout(supabaseClient.auth.signOut(),8000); }catch(e){ console.warn('signout before teacher login:',e); }
+
+    // استخدام Supabase SDK مباشرة بدل طلب fetch يدوي حتى يكون دخول المعلمة
+    // متوافقًا مع نفس مسار المصادقة الذي يعمل مع دخول الطالبة.
+    const authResult=await withTimeout(
+      supabaseClient.auth.signInWithPassword({email,password}),
+      15000
     );
-    if(sessionResult?.error) throw sessionResult.error;
+    const {data,error}=authResult||{};
+    if(error){
+      const msgText=error.message||'تعذر تسجيل الدخول.';
+      msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+msgText+'</div>';
+      return;
+    }
+    const user=data?.user;
+    if(!user){
+      msg.innerHTML='<div class="notice" style="color:#b42318">لم تُرجع خدمة الحساب بيانات المستخدم.</div>';
+      return;
+    }
+
+    msg.innerHTML='<div class="notice">⏳ تم التحقق من الحساب، جارٍ تحميل الصلاحيات...</div>';
     const profileResult=await withTimeout(
-      supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',authJson.user.id).maybeSingle(),
-      10000
+      supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',user.id).maybeSingle(),
+      12000
     );
     const {data:profile,error:pe}=profileResult||{};
     if(pe||!profile){
@@ -459,17 +454,15 @@ async function loginTeacher(){
       return;
     }
     cloudProfile=profile; cloudReady=true;
-    msg.innerHTML='<div class="notice">⏳ جارٍ تحميل بيانات لوحة التحكم...</div>';
+    msg.innerHTML='<div class="notice">⏳ تم الدخول بنجاح، جارٍ تحميل لوحة التحكم...</div>';
     await loadCloudReferenceData();
     await loadCloudQuestions();
     show('teacher');
   }catch(e){
     console.error('teacher login:',e);
-    const message=e?.name==='AbortError'
-      ? 'انتهت مهلة الاتصال بـ Supabase. إذا كان الإنترنت يعمل، افتحي Supabase وتحققي من أن المشروع يعمل ثم أعيدي المحاولة.'
-      : (e?.message==='TIMEOUT'
-        ? 'استغرق تحميل الصلاحيات وقتًا أطول من المتوقع. أعيدي المحاولة.'
-        : (e?.message||'تعذر الاتصال بخدمة تسجيل الدخول.'));
+    const message=e?.message==='TIMEOUT'
+      ? 'استغرق الاتصال بخدمة الحسابات وقتًا أطول من المتوقع. تحققي من اتصال الإنترنت ثم أعيدي المحاولة.'
+      : (e?.message||'تعذر الاتصال بخدمة تسجيل الدخول.');
     msg.innerHTML='<div class="notice" style="color:#b42318">'+message+'</div>';
   }
 }
