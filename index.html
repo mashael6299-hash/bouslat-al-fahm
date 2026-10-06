@@ -215,8 +215,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px;border-bottom:1px s
 <h3>🩺 خطة الدعم العلاجي</h3>
 <div class="notice">تعرض هذه الصفحة الطالبات اللاتي حصلن على أقل من 60% في أحد المجالات، مع مجال الاحتياج والإجراء المقترح.</div>
 <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap" class="no-print"><button class="green" onclick="printSupportPlan()">🖨️ طباعة خطة الدعم</button><button class="secondary" onclick="renderRemeasurement()">📈 إعادة القياس</button></div>
-<div id="supportPlanOutput"></div>
-<div id="remeasurementOutput" style="margin-top:22px"></div>
+<div id="supportPlanOutput"></div><div id="remeasurementOutput" style="margin-top:24px"></div>
 </div>
 <div id="reports" class="teacherTab panel" style="display:none">
 <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
@@ -388,21 +387,44 @@ async function openTeacherLogin(){
   document.getElementById('teacherPassword').value='';
   show('teacherLogin');
 }
+async function withTimeout(promise, ms=15000){
+  let timer;
+  const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('TIMEOUT')),ms)});
+  try{return await Promise.race([promise,timeout]);}
+  finally{clearTimeout(timer)}
+}
 async function loginTeacher(){
   const email=document.getElementById('teacherEmail').value.trim();
   const password=document.getElementById('teacherPassword').value;
   const msg=document.getElementById('teacherLoginMsg');
   if(!email||!password){msg.innerHTML='<div class="notice">أدخلي البريد الإلكتروني وكلمة المرور.</div>';return}
-  msg.innerHTML='<div class="notice">⏳ جارٍ التحقق...</div>';
-  const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
-  if(error){msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+(error.message||'تحققي من البيانات.')+'</div>';return}
-  const {data:profile,error:pe}=await supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',data.user.id).maybeSingle();
-  if(pe||!profile){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">تم تسجيل الدخول لكن لم يتم العثور على ملف الصلاحيات.</div>';return}
-  if(!['admin','teacher'].includes(profile.role)){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">هذا الحساب ليس حساب معلمة أو مشرفة.</div>';return}
-  cloudProfile=profile; cloudReady=true;
-  await loadCloudReferenceData();
-  await loadCloudQuestions();
-  show('teacher');
+  msg.innerHTML='<div class="notice">⏳ جارٍ التحقق من الحساب والاتصال بقاعدة البيانات...</div>';
+  try{
+    const result=await withTimeout(supabaseClient.auth.signInWithPassword({email,password}),15000);
+    const {data,error}=result||{};
+    if(error){
+      msg.innerHTML='<div class="notice" style="color:#b42318">تعذر الدخول: '+(error.message||'تحققي من البريد وكلمة المرور.')+'</div>';
+      return;
+    }
+    if(!data?.user){
+      msg.innerHTML='<div class="notice" style="color:#b42318">تعذر التحقق من الحساب. حاولي مرة أخرى.</div>';
+      return;
+    }
+    const pr=await withTimeout(supabaseClient.from('profiles').select('id,full_name,role,class_id,subject_id').eq('id',data.user.id).maybeSingle(),10000);
+    const {data:profile,error:pe}=pr||{};
+    if(pe||!profile){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">تم تسجيل الدخول لكن لم يتم العثور على ملف الصلاحيات.</div>';return}
+    if(!['admin','teacher'].includes(profile.role)){await supabaseClient.auth.signOut();msg.innerHTML='<div class="notice" style="color:#b42318">هذا الحساب ليس حساب معلمة أو مشرفة.</div>';return}
+    cloudProfile=profile; cloudReady=true;
+    await loadCloudReferenceData();
+    await loadCloudQuestions();
+    show('teacher');
+  }catch(e){
+    console.error('teacher login:',e);
+    const message=e?.message==='TIMEOUT'
+      ? 'انتهت مهلة الاتصال بخدمة Supabase. تأكدي من اتصال الإنترنت ثم أعيدي المحاولة.'
+      : (e?.message||'تعذر الاتصال بخدمة تسجيل الدخول.');
+    msg.innerHTML='<div class="notice" style="color:#b42318">'+message+'</div>';
+  }
 }
 async function logoutTeacher(){
   await supabaseClient.auth.signOut(); cloudProfile=null; cloudReady=false; show('home');
@@ -1136,9 +1158,14 @@ async function loadCloudAdminResults(){
     const attemptById={}; cloudAttempts.forEach(a=>attemptById[String(a.id)]=a);
     ansData.forEach(ans=>{const a=attemptById[String(ans.attempt_id)],q=cloudQuestionMap[String(ans.question_id)];if(!a||!q||!q.domain_id)return;const sub=subjectKeyById(a.subject_id);if(!sub)return;const key=String(a.student_id)+'|'+sub+'|'+String(q.domain_id);if(!cloudDomainStats[key])cloudDomainStats[key]={correct:0,total:0,attempts:new Set()};cloudDomainStats[key].total++;if(ans.is_correct)cloudDomainStats[key].correct++;cloudDomainStats[key].attempts.add(String(a.id));});
     const byId={};
-    cloudStudentProfiles.forEach(p=>{byId[p.id]={id:p.id,name:p.full_name||'طالبة',class:cloudClassNameById(p.class_id)||'-',reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0},domains:{}};});
+    cloudStudentProfiles.forEach(p=>{byId[p.id]={id:p.id,name:p.full_name||'طالبة',class:cloudClassNameById(p.class_id)||'-',reading:{score:0,attempts:0},science:{score:0,attempts:0},math:{score:0,attempts:0},domains:{},domainHistory:{}};});
     cloudAttempts.forEach(a=>{if(!byId[a.student_id])return;const sub=subjectKeyById(a.subject_id);if(!sub)return;const x=byId[a.student_id][sub];x.attempts++;x.score=Math.max(x.score,Number(a.score)||0);});
     Object.keys(cloudDomainStats).forEach(key=>{const [studentId,sub,domainId]=key.split('|'),r=byId[studentId];if(!r)return;const d=cloudDomainStats[key],pct=d.total?Math.round(d.correct/d.total*100):0,domain=domainNameById(domainId)||('مجال '+domainId);if(!r.domains[sub])r.domains[sub]={};r.domains[sub][domain]={score:pct,attempts:d.attempts.size,total:d.total,correct:d.correct};});
+    // بناء سجل زمني لإعادة القياس من محاولات السحابة
+    const historyAgg={};
+    ansData.forEach(ans=>{const a=attemptById[String(ans.attempt_id)],q=cloudQuestionMap[String(ans.question_id)];if(!a||!q||!q.domain_id)return;const r=byId[a.student_id],sub=subjectKeyById(a.subject_id);if(!r||!sub)return;const domain=domainNameById(q.domain_id)||('مجال '+q.domain_id);const key=String(a.student_id)+'|'+sub+'|'+domain+'|'+String(a.id);if(!historyAgg[key])historyAgg[key]={studentId:a.student_id,sub,domain,attemptId:String(a.id),date:a.created_at||'',correct:0,total:0};historyAgg[key].total++;if(ans.is_correct)historyAgg[key].correct++;});
+    Object.values(historyAgg).forEach(x=>{const r=byId[x.studentId];if(!r)return;if(!r.domainHistory[x.sub])r.domainHistory[x.sub]={};if(!r.domainHistory[x.sub][x.domain])r.domainHistory[x.sub][x.domain]=[];r.domainHistory[x.sub][x.domain].push({score:x.total?Math.round(x.correct/x.total*100):0,date:x.date});});
+    Object.values(byId).forEach(r=>Object.values(r.domainHistory).forEach(ds=>Object.values(ds).forEach(arr=>arr.sort((a,b)=>String(a.date).localeCompare(String(b.date))))));
     results={}; Object.values(byId).forEach(r=>results[r.name]=r); localStorage.setItem('bf_results',JSON.stringify(results));
   }catch(e){console.warn('cloud results/domain analysis:',e);}
 }
