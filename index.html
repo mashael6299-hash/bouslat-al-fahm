@@ -112,7 +112,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px;border-bottom:1px s
 <section id="teacher" class="screen">
 <div class="topbar"><div><h2>👩‍🏫 لوحة المعلمة</h2><p style="color:#777">إدارة التدريبات وتحليل رحلة الطالبات.</p></div><button class="secondary" onclick="show('home')">خروج</button></div>
 <div class="stats"><div class="stat">الطالبات<b id="tStudents">0</b></div><div class="stat">الأسئلة<b id="tQuestions">0</b></div><div class="stat">التدريبات المنجزة<b id="tAttempts">0</b></div><div class="stat">متوسط الأداء<b id="tAverage">0%</b></div></div>
-<div class="tabs"><button class="active" onclick="teacherTab('dashboard',this)">النتائج</button><button onclick="teacherTab('create',this)">إنشاء سؤال</button><button onclick="teacherTab('bank',this)">بنك الأسئلة</button><button onclick="teacherTab('weekly',this)">رحلات الفهم</button><button onclick="teacherTab('support',this)">خطة الدعم</button><button onclick="teacherTab('reports',this)">التقارير</button></div>
+<div class="tabs"><button class="active" onclick="teacherTab('dashboard',this)">النتائج</button><button onclick="teacherTab('create',this)">إنشاء سؤال</button><button onclick="teacherTab('bank',this)">بنك الأسئلة</button><button onclick="teacherTab('weekly',this)">رحلات الفهم</button></div>
 <div id="dashboard" class="teacherTab panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>📊 نتائج الطالبات</h3><button class="green no-print" onclick="printResults()">🖨️ طباعة النتائج</button></div>
 <div style="display:flex;gap:15px;flex-wrap:wrap;margin-bottom:18px">
 <div style="max-width:300px;flex:1;min-width:220px">
@@ -211,28 +211,8 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px;border-bottom:1px s
 <h4 style="margin-top:30px">📌 الأسئلة المنشورة</h4>
 <div id="publishedTasks"></div>
 </div>
-<div id="support" class="teacherTab panel" style="display:none">
-<h3>🩺 خطة الدعم العلاجي</h3>
-<div class="notice">تعرض هذه الصفحة الطالبات اللاتي حصلن على أقل من 60% في أحد المجالات، مع مجال الاحتياج والإجراء المقترح.</div>
-<div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap" class="no-print"><button class="green" onclick="printSupportPlan()">🖨️ طباعة خطة الدعم</button><button class="secondary" onclick="renderRemeasurement()">📈 إعادة القياس</button></div>
-<div id="supportPlanOutput"></div><div id="remeasurementOutput" style="margin-top:24px"></div>
-</div>
-<div id="reports" class="teacherTab panel" style="display:none">
-<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-<h3>📄 التقارير والرسوم البيانية</h3>
-<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="green no-print" onclick="printCurrentReport()">🖨️ طباعة التقرير</button><button class="secondary no-print" onclick="printOfficialReport()">📄 تقرير رسمي</button></div>
-</div>
-<div class="tabs no-print">
-<button class="active" onclick="reportMode='class';renderReports();this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));this.classList.add('active')">تقرير الفصل</button>
-<button onclick="reportMode='student';renderReports();this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));this.classList.add('active')">تقرير طالبة</button>
-</div>
-<div id="classReportControls" class="no-print" style="display:flex;gap:15px;flex-wrap:wrap">
-<div style="min-width:220px"><label><b>الفصل</b></label><select id="reportClass" class="input" onchange="renderReports()"><option value="all">جميع الفصول</option><option value="ثالث أول">ثالث أول</option><option value="ثالث ثاني">ثالث ثاني</option><option value="ثالث ثالث">ثالث ثالث</option></select></div>
-<div style="min-width:220px"><label><b>المادة</b></label><select id="reportSubject" class="input" onchange="renderReports()"><option value="all">جميع المواد</option><option value="reading">القراءة</option><option value="science">العلوم</option><option value="math">الرياضيات</option></select></div>
-</div>
-<div id="studentReportControls" class="no-print" style="display:none;max-width:350px"><label><b>الطالبة</b></label><select id="reportStudent" class="input" onchange="renderReports()"></select></div>
-<div id="reportOutput"></div>
-</div></section>
+
+</section>
 </div>
 <div class="footer">بوصلة الفهم © 2026 — نموذج تجريبي تعليمي</div>
 
@@ -3167,4 +3147,198 @@ window.logoutStudent = async function(){
 })();
 
 </script>
+<script>
+// ===== إصلاح تحميل نتائج المعلمات وإزالة واجهات التقارير/الدعم =====
+(function installResultsTabFix(){
+  if (window.__bfResultsTabFixV1) return;
+  window.__bfResultsTabFixV1 = true;
+
+  window.loadCloudAdminResults = loadCloudAdminResults = async function(){
+    if (!cloudReady || !cloudProfile || !['admin','teacher'].includes(cloudProfile.role)) return false;
+    try{
+      // Student profiles are not assigned a subject_id; filter results by task.subject_id instead.
+      const profilesReq = await withTimeout(
+        supabaseClient.from('profiles')
+          .select('id,full_name,role,class_id,subject_id')
+          .eq('role','student'),
+        10000
+      );
+      if (profilesReq.error) throw profilesReq.error;
+      let profiles = Array.isArray(profilesReq.data) ? profilesReq.data : [];
+
+      // The live schema identifies a subject through tasks, not necessarily attempts.subject_id.
+      const attemptsReq = await withTimeout(
+        supabaseClient.from('attempts')
+          .select('id,student_id,task_id,score,total,started_at,completed_at')
+          .order('completed_at', {ascending:false}),
+        10000
+      );
+      if (attemptsReq.error) throw attemptsReq.error;
+      const rawAttempts = Array.isArray(attemptsReq.data) ? attemptsReq.data : [];
+      const taskIds = [...new Set(rawAttempts.map(a => Number(a.task_id)).filter(Number.isFinite))];
+      let tasks = [];
+      if (taskIds.length){
+        const tasksReq = await withTimeout(
+          supabaseClient.from('tasks')
+            .select('id,subject_id,title,created_by,is_published,published_at,stopped_at')
+            .in('id', taskIds),
+          10000
+        );
+        if (tasksReq.error) throw tasksReq.error;
+        tasks = Array.isArray(tasksReq.data) ? tasksReq.data : [];
+      }
+      const taskMap = {};
+      tasks.forEach(t => { taskMap[String(t.id)] = t; });
+
+      let mappedAttempts = rawAttempts.map(a => {
+        const task = taskMap[String(a.task_id)] || {};
+        return {
+          ...a,
+          subject_id: task.subject_id ?? a.subject_id ?? null,
+          title: task.title || '',
+          created_at: a.completed_at || a.started_at || null
+        };
+      }).filter(a => a.subject_id != null);
+
+      // Teachers only see attempts belonging to their assigned subject; admins see all.
+      if (cloudProfile.role === 'teacher'){
+        mappedAttempts = mappedAttempts.filter(a => String(a.subject_id) === String(cloudProfile.subject_id));
+      }
+
+      // Make sure every student who has a visible attempt has a profile row, even if the initial
+      // student roster query was restricted by RLS.
+      const found = new Set(profiles.map(p => String(p.id)));
+      const missingIds = [...new Set(mappedAttempts.map(a => String(a.student_id)))].filter(id => !found.has(id));
+      if (missingIds.length){
+        const missingReq = await withTimeout(
+          supabaseClient.from('profiles')
+            .select('id,full_name,role,class_id,subject_id')
+            .in('id', missingIds),
+          8000
+        );
+        if (!missingReq.error && Array.isArray(missingReq.data)) profiles = profiles.concat(missingReq.data);
+      }
+
+      const profileMap = {};
+      profiles.forEach(p => { profileMap[String(p.id)] = p; });
+      // If a visible attempt has no readable profile, keep the result visible with a neutral label.
+      mappedAttempts.forEach(a => {
+        if (!profileMap[String(a.student_id)]){
+          const fallback = {id:a.student_id,full_name:'طالبة ' + String(a.student_id).slice(0,8),role:'student',class_id:null};
+          profileMap[String(a.student_id)] = fallback;
+          profiles.push(fallback);
+        }
+      });
+
+      cloudStudentProfiles = profiles.filter(p => p.role === 'student' || !p.role);
+      cloudAttempts = mappedAttempts;
+      const byId = {};
+      cloudStudentProfiles.forEach(p => {
+        byId[String(p.id)] = {
+          id:p.id,
+          name:p.full_name || 'طالبة',
+          class:cloudClassNameById(p.class_id) || '-',
+          reading:{score:0,attempts:0},
+          science:{score:0,attempts:0},
+          math:{score:0,attempts:0},
+          domains:{},
+          attemptHistory:[]
+        };
+      });
+      cloudAttempts.forEach(a => {
+        const row = byId[String(a.student_id)];
+        const sub = subjectKeyById(a.subject_id);
+        if (!row || !['reading','science','math'].includes(sub)) return;
+        const pct = pctFromAttempt(a);
+        const subjectResult = row[sub];
+        subjectResult.score = Math.max(Number(subjectResult.score)||0, pct);
+        subjectResult.attempts = (Number(subjectResult.attempts)||0) + 1;
+        subjectResult.last = pct;
+        row.attemptHistory.push({
+          attemptId:a.id, taskId:a.task_id, subject:sub, score:pct,
+          total:Number(a.total)||0, completedAt:a.completed_at||a.started_at||null,
+          title:a.title || names[sub]
+        });
+      });
+      Object.values(byId).forEach(r => r.attemptHistory.sort((a,b) => String(b.completedAt||'').localeCompare(String(a.completedAt||''))));
+      window.__bfCloudResultsById = byId;
+      results = {};
+      Object.values(byId).forEach(r => { results[r.name] = r; });
+      localStorage.setItem('bf_results', JSON.stringify(results));
+      window.__bfResultsLoadError = null;
+      return true;
+    }catch(e){
+      console.error('loadCloudAdminResults corrected:', e);
+      window.__bfResultsLoadError = e?.message || 'تعذر تحميل النتائج من قاعدة البيانات.';
+      const body = document.getElementById('resultsTable');
+      if (body) body.innerHTML = `<tr><td colspan="7" class="empty" style="color:#b42318">تعذر تحميل النتائج: ${escapeHtml(window.__bfResultsLoadError)}</td></tr>`;
+      return false;
+    }
+  };
+
+  window.renderResultsTable = renderResultsTable = function(){
+    const body = document.getElementById('resultsTable');
+    if (!body) return;
+    const classFilter = document.getElementById('classFilter')?.value || 'all';
+    const subjectSelect = document.getElementById('subjectFilter');
+    let subjectFilter = subjectSelect?.value || 'all';
+    const teacherSubject = cloudProfile?.role === 'teacher' ? subjectKeyById(cloudProfile.subject_id) : null;
+    if (teacherSubject && subjectFilter === 'all' && subjectSelect){
+      subjectSelect.value = teacherSubject;
+      subjectFilter = teacherSubject;
+    }
+
+    const byId = window.__bfCloudResultsById || {};
+    let rows = (cloudStudentProfiles || []).map(p => ({p, r:byId[String(p.id)] || results[p.full_name || '']})).filter(x => x.r);
+    if (classFilter !== 'all') rows = rows.filter(x => String(x.r.class || '') === classFilter);
+    const head = document.querySelector('#dashboard table thead tr');
+    if (subjectFilter === 'all'){
+      if (head) head.innerHTML = '<th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th><th>تفاصيل الحل</th>';
+      body.innerHTML = rows.map(({p,r}) => {
+        const subs=['reading','science','math'];
+        const vals=subs.map(sub => Number(r[sub]?.score)||0);
+        const active=subs.filter(sub => Number(r[sub]?.attempts)>0).map(sub => Number(r[sub].score)||0);
+        const avg=active.length ? Math.round(active.reduce((a,b)=>a+b,0)/active.length) : 0;
+        const has=active.length>0;
+        return `<tr><td><b>${escapeHtml(r.name || p.full_name || 'طالبة')}</b></td><td>${escapeHtml(r.class || '-')}</td><td>${vals[0]}%</td><td>${vals[1]}%</td><td>${vals[2]}%</td><td><b>${avg}%</b></td><td>${has?`<button class="secondary" onclick="viewStudentLatestAttempt('${p.id}','')">عرض الحل</button>`:'-'}</td></tr>`;
+      }).join('') || `<tr><td colspan="7" class="empty">${window.__bfResultsLoadError ? 'تعذر تحميل النتائج: '+escapeHtml(window.__bfResultsLoadError) : 'لا توجد محاولات مكتملة محفوظة في قاعدة البيانات حتى الآن.'}</td></tr>`;
+    }else{
+      if (head) head.innerHTML = '<th>الطالبة</th><th>الصف</th><th>المادة</th><th>النتيجة</th><th>عدد المحاولات</th><th>تفاصيل الحل</th>';
+      body.innerHTML = rows.map(({p,r}) => {
+        const val=r[subjectFilter]||{score:0,attempts:0};
+        return `<tr><td><b>${escapeHtml(r.name || p.full_name || 'طالبة')}</b></td><td>${escapeHtml(r.class || '-')}</td><td>${names[subjectFilter]||subjectFilter}</td><td><b>${Number(val.score)||0}%</b></td><td>${Number(val.attempts)||0}</td><td>${Number(val.attempts)>0?`<button class="secondary" onclick="viewStudentLatestAttempt('${p.id}','${subjectFilter}')">عرض الحل</button>`:'-'}</td></tr>`;
+      }).join('') || `<tr><td colspan="6" class="empty">${window.__bfResultsLoadError ? 'تعذر تحميل النتائج: '+escapeHtml(window.__bfResultsLoadError) : 'لا توجد نتائج لهذه المادة حتى الآن.'}</td></tr>`;
+    }
+  };
+
+  window.renderTeacher = renderTeacher = async function(){
+    applyTeacherSubjectLock();
+    if (cloudReady && cloudProfile && ['admin','teacher'].includes(cloudProfile.role)) await loadCloudAdminResults();
+    const rows=Object.values(window.__bfCloudResultsById || {});
+    const attempts=Array.isArray(cloudAttempts)?cloudAttempts:[];
+    if(document.getElementById('tStudents')) document.getElementById('tStudents').textContent=cloudStudentProfiles?.length || rows.length;
+    if(document.getElementById('tQuestions')) document.getElementById('tQuestions').textContent=questions?.length || 0;
+    if(document.getElementById('tAttempts')) document.getElementById('tAttempts').textContent=attempts.length;
+    const scores=attempts.map(a=>pctFromAttempt(a)).filter(Number.isFinite);
+    if(document.getElementById('tAverage')) document.getElementById('tAverage').textContent=(scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length):0)+'%';
+    renderResultsTable();
+    applyTeacherSubjectLock();
+    if(document.getElementById('newSkill')) updateSkillOptions();
+    if(document.getElementById('newSubject')) toggleQuestionBuilder();
+    if(typeof renderBank==='function') renderBank();
+  };
+
+  // Refresh the data whenever the teacher opens the Results tab, not only on first login.
+  const previousTeacherTab = window.teacherTab || teacherTab;
+  window.teacherTab = teacherTab = function(id, btn){
+    if (!document.getElementById(id)) return;
+    previousTeacherTab.call(this, id, btn);
+    if (id === 'dashboard' && cloudReady && cloudProfile && ['admin','teacher'].includes(cloudProfile.role)){
+      document.getElementById('resultsTable')?.querySelectorAll('tr').forEach(()=>{});
+      loadCloudAdminResults().then(()=>renderResultsTable()).catch(e=>console.warn('refresh results tab:',e));
+    }
+  };
+})();
+</script>
+
 </body></html>
