@@ -110,7 +110,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px;border-bottom:1px s
 </div></section>
 
 <section id="teacher" class="screen">
-<div class="topbar"><div><h2>👩‍🏫 لوحة المعلمة</h2><p style="color:#777">إدارة التدريبات وتحليل رحلة الطالبات.</p></div><button class="secondary" onclick="show('home')">خروج</button></div>
+<div class="topbar"><div><h2>👩‍🏫 لوحة المعلمة</h2><p style="color:#777">إدارة التدريبات ومتابعة نتائج الطالبات.</p></div><button class="secondary" onclick="show('home')">خروج</button></div>
 <div class="stats"><div class="stat">الطالبات<b id="tStudents">0</b></div><div class="stat">الأسئلة<b id="tQuestions">0</b></div><div class="stat">التدريبات المنجزة<b id="tAttempts">0</b></div><div class="stat">متوسط الأداء<b id="tAverage">0%</b></div></div>
 <div class="tabs"><button class="active" onclick="teacherTab('dashboard',this)">النتائج</button><button onclick="teacherTab('create',this)">إنشاء سؤال</button><button onclick="teacherTab('bank',this)">بنك الأسئلة</button><button onclick="teacherTab('weekly',this)">رحلات الفهم</button></div>
 <div id="dashboard" class="teacherTab panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>📊 نتائج الطالبات</h3><button class="green no-print" onclick="printResults()">🖨️ طباعة النتائج</button></div>
@@ -134,8 +134,8 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px;border-bottom:1px s
 </select>
 </div>
 </div>
-<div id="dashboardInsights" class="panel" style="margin-top:20px;border:1px solid #e8def5;background:#fcfaff"></div>
-<table><thead><tr><th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th></tr></thead><tbody id="resultsTable"></tbody></table><div id="attemptDetailsPanel" class="panel" style="margin-top:22px;border:1px solid #eadff5;box-shadow:none;display:none"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">📝 تفاصيل حل الطالبة</h3><button class="secondary no-print" onclick="closeAttemptDetails()">إغلاق</button></div><div id="attemptDetailsOutput" style="margin-top:15px"></div></div><div id="smartAnalysisPanel" style="margin-top:25px"><div class="panel" style="border:1px solid #eadff5;box-shadow:none"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h3>🧠 التحليل الذكي حسب المجالات</h3><button class="green no-print" onclick="printDashboardAnalysis()">🖨️ طباعة التحليل</button></div><div id="smartAnalysisContent"><div class="empty">سيظهر التحليل بعد توفر نتائج الطالبات.</div></div></div></div></div>
+<table><thead><tr><th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th><th>آخر تاريخ حل</th><th>تفاصيل الحل</th></tr></thead><tbody id="resultsTable"></tbody></table><div id="attemptDetailsPanel" class="panel" style="margin-top:22px;border:1px solid #eadff5;box-shadow:none;display:none"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">📝 تفاصيل حل الطالبة</h3><button class="secondary no-print" onclick="closeAttemptDetails()">إغلاق</button></div><div id="attemptDetailsOutput" style="margin-top:15px"></div></div></div>
+
 <div id="create" class="teacherTab panel" style="display:none">
 <h3>✏️ إنشاء تدريب جديد</h3>
 
@@ -899,12 +899,16 @@ function printCurrentReport(){
 }
 function printBlock(el,title){
   if(!el)return;
+  const reportDate = new Intl.DateTimeFormat('ar-SA-u-ca-gregory',{year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const isResultsReport = String(title||'').includes('نتائج الطالبات');
+  const dateLine = isResultsReport ? `<p class="print-date">تاريخ التقرير: ${reportDate}</p>` : '';
   let w=window.open('','_blank');
   w.document.write(`<html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${title}</title><style>
-  body{font-family:Arial,sans-serif;padding:30px;color:#222}h1,h2,h3{text-align:center;color:#5d479c}
+  body{font-family:Arial,sans-serif;padding:30px;color:#222}h1,h2,h3{text-align:center;color:#5d479c}.print-date{text-align:left;font-weight:700;margin:0 0 14px;color:#444}
   table{width:100%;border-collapse:collapse;margin:20px 0}th,td{border:1px solid #ccc;padding:9px;text-align:right}th{background:#f2edf9}
   .chart-wrap{border:1px solid #ddd;border-radius:12px;padding:15px;margin:20px 0}.chart-bars{display:flex;align-items:flex-end;gap:18px;height:220px;padding:25px 10px 5px;border-bottom:1px solid #aaa}.chart-col{flex:1;text-align:center}.chart-bar{margin:auto;width:50px;background:#7657c8;border-radius:10px 10px 0 0;position:relative}.chart-bar span{position:absolute;top:-24px;left:0;right:0}.chart-label{font-size:12px;margin-top:6px}.stat{display:inline-block;border:1px solid #ddd;padding:12px;margin:5px;border-radius:10px}
-  </style></head><body><h2>${title}</h2>${el.innerHTML}</body></html>`);
+  .no-print,button,select,label{display:none!important}
+  </style></head><body><h2>${title}</h2>${dateLine}${el.innerHTML}</body></html>`);
   w.document.close();w.focus();setTimeout(()=>w.print(),250);
 }
 function populateReportStudents(){
@@ -3288,25 +3292,39 @@ window.logoutStudent = async function(){
       subjectFilter = teacherSubject;
     }
 
+    const formatResultDate = value => {
+      if (!value) return '-';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return '-';
+      return new Intl.DateTimeFormat('ar-SA-u-ca-gregory', {year:'numeric', month:'2-digit', day:'2-digit'}).format(d);
+    };
+    const lastAttemptDate = (r, subject = null) => {
+      const history = Array.isArray(r?.attemptHistory) ? r.attemptHistory : [];
+      const candidates = history.filter(h => (!subject || h.subject === subject) && (h.completedAt || h.created_at || h.started_at));
+      if (!candidates.length) return '-';
+      candidates.sort((a,b) => new Date(b.completedAt || b.created_at || b.started_at || 0).getTime() - new Date(a.completedAt || a.created_at || a.started_at || 0).getTime());
+      return formatResultDate(candidates[0].completedAt || candidates[0].created_at || candidates[0].started_at);
+    };
+
     const byId = window.__bfCloudResultsById || {};
     let rows = (cloudStudentProfiles || []).map(p => ({p, r:byId[String(p.id)] || results[p.full_name || '']})).filter(x => x.r);
     if (classFilter !== 'all') rows = rows.filter(x => String(x.r.class || '') === classFilter);
     const head = document.querySelector('#dashboard table thead tr');
     if (subjectFilter === 'all'){
-      if (head) head.innerHTML = '<th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th><th>تفاصيل الحل</th>';
+      if (head) head.innerHTML = '<th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th><th>آخر تاريخ حل</th><th>تفاصيل الحل</th>';
       body.innerHTML = rows.map(({p,r}) => {
         const subs=['reading','science','math'];
         const vals=subs.map(sub => Number(r[sub]?.score)||0);
         const active=subs.filter(sub => Number(r[sub]?.attempts)>0).map(sub => Number(r[sub].score)||0);
         const avg=active.length ? Math.round(active.reduce((a,b)=>a+b,0)/active.length) : 0;
         const has=active.length>0;
-        return `<tr><td><b>${escapeHtml(r.name || p.full_name || 'طالبة')}</b></td><td>${escapeHtml(r.class || '-')}</td><td>${vals[0]}%</td><td>${vals[1]}%</td><td>${vals[2]}%</td><td><b>${avg}%</b></td><td>${has?`<button class="secondary" onclick="viewStudentLatestAttempt('${p.id}','')">عرض الحل</button>`:'-'}</td></tr>`;
-      }).join('') || `<tr><td colspan="7" class="empty">${window.__bfResultsLoadError ? 'تعذر تحميل النتائج: '+escapeHtml(window.__bfResultsLoadError) : 'لا توجد محاولات مكتملة محفوظة في قاعدة البيانات حتى الآن.'}</td></tr>`;
+        return `<tr><td><b>${escapeHtml(r.name || p.full_name || 'طالبة')}</b></td><td>${escapeHtml(r.class || '-')}</td><td>${vals[0]}%</td><td>${vals[1]}%</td><td>${vals[2]}%</td><td><b>${avg}%</b></td><td>${lastAttemptDate(r)}</td><td>${has?`<button class="secondary" onclick="viewStudentLatestAttempt('${p.id}','')">عرض الحل</button>`:'-'}</td></tr>`;
+      }).join('') || `<tr><td colspan="8" class="empty">${window.__bfResultsLoadError ? 'تعذر تحميل النتائج: '+escapeHtml(window.__bfResultsLoadError) : 'لا توجد محاولات مكتملة محفوظة في قاعدة البيانات حتى الآن.'}</td></tr>`;
     }else{
-      if (head) head.innerHTML = '<th>الطالبة</th><th>الصف</th><th>المادة</th><th>النتيجة</th><th>عدد المحاولات</th><th>تفاصيل الحل</th>';
+      if (head) head.innerHTML = '<th>الطالبة</th><th>الصف</th><th>المادة</th><th>النتيجة</th><th>تاريخ آخر حل</th><th>تفاصيل الحل</th>';
       body.innerHTML = rows.map(({p,r}) => {
         const val=r[subjectFilter]||{score:0,attempts:0};
-        return `<tr><td><b>${escapeHtml(r.name || p.full_name || 'طالبة')}</b></td><td>${escapeHtml(r.class || '-')}</td><td>${names[subjectFilter]||subjectFilter}</td><td><b>${Number(val.score)||0}%</b></td><td>${Number(val.attempts)||0}</td><td>${Number(val.attempts)>0?`<button class="secondary" onclick="viewStudentLatestAttempt('${p.id}','${subjectFilter}')">عرض الحل</button>`:'-'}</td></tr>`;
+        return `<tr><td><b>${escapeHtml(r.name || p.full_name || 'طالبة')}</b></td><td>${escapeHtml(r.class || '-')}</td><td>${names[subjectFilter]||subjectFilter}</td><td><b>${Number(val.score)||0}%</b></td><td>${lastAttemptDate(r, subjectFilter)}</td><td>${Number(val.attempts)>0?`<button class="secondary" onclick="viewStudentLatestAttempt('${p.id}','${subjectFilter}')">عرض الحل</button>`:'-'}</td></tr>`;
       }).join('') || `<tr><td colspan="6" class="empty">${window.__bfResultsLoadError ? 'تعذر تحميل النتائج: '+escapeHtml(window.__bfResultsLoadError) : 'لا توجد نتائج لهذه المادة حتى الآن.'}</td></tr>`;
     }
   };
