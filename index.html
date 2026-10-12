@@ -3323,6 +3323,9 @@ window.logoutStudent = async function(){
     };
     const inDateRange = h => {
       const key = dateKey(dateValue(h));
+      // With no date filter selected, do not hide older attempts whose timestamp is missing.
+      // Only require a valid timestamp when the user has explicitly chosen a date range.
+      if (!dateFrom && !dateTo) return true;
       if (!key) return false;
       if (dateFrom && key < dateFrom) return false;
       if (dateTo && key > dateTo) return false;
