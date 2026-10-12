@@ -21,7 +21,7 @@ button.secondary{background:#eee8f8;color:var(--primary)}button.green{background
 .input{width:100%;padding:14px;border:1px solid #ddd4e9;border-radius:13px;font-family:inherit;margin:8px 0 16px;font-size:15px}
 .login{max-width:470px;margin:45px auto;background:white;padding:35px;border-radius:24px;box-shadow:0 8px 30px #3d285b12}.login h2{text-align:center;color:var(--primary)}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}.welcome h2{margin:0}.welcome p{color:var(--muted)}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin:20px 0}.stat{background:white;padding:18px;border-radius:18px;text-align:center;box-shadow:0 4px 18px #3d285b0d}.stat b{font-size:25px;color:var(--primary);display:block}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin:20px 0}#student .stats{grid-template-columns:repeat(3,1fr)}.stat{background:white;padding:18px;border-radius:18px;text-align:center;box-shadow:0 4px 18px #3d285b0d}.stat b{font-size:25px;color:var(--primary);display:block}
 .subjects{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.subject{background:white;padding:25px;border-radius:22px;box-shadow:0 5px 20px #3d285b10;border-top:5px solid var(--primary)}.subject.science{border-color:#5fae83}.subject.math{border-color:#e49b59}.subject h3{font-size:21px}
 .progress{height:9px;background:#eee;border-radius:10px;overflow:hidden;margin:12px 0}.progress span{display:block;height:100%;background:var(--primary);border-radius:10px}
 .panel{background:white;border-radius:22px;padding:25px;box-shadow:0 5px 20px #3d285b10;margin:20px 0}.panel h3{color:var(--primary)}
@@ -82,18 +82,14 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px;border-bottom:1px s
 <section id="student" class="screen">
 <div class="topbar"><div class="welcome"><h2>مرحبًا، <span id="displayName"></span> 🌷</h2><p>واصلي رحلتك، كل تدريب يقربك من وجهتك.</p></div><button class="secondary" onclick="logoutStudent()">خروج</button></div>
 <div class="stats">
-<div class="stat">متوسط الأداء<b id="avg">0%</b></div><div class="stat">التدريبات المكتملة<b id="done">0</b></div><div class="stat">النقاط<b id="points">0</b></div><div class="stat">الشارات<b id="badges">0</b></div>
+<div class="stat">متوسط الأداء<b id="avg">0%</b></div><div class="stat">التدريبات المكتملة<b id="done">0</b></div><div class="stat">النقاط<b id="points">0</b></div>
 </div>
 <div class="subjects">
 <div class="subject"><div style="font-size:42px">📖</div><h3>القراءة</h3><p>الفكرة الرئيسة والاستنتاج والمفردات.</p><div class="progress"><span id="readingProg" style="width:0%"></span></div><button onclick="startQuiz('reading')">ابدئي التدريب</button></div>
 <div class="subject science"><div style="font-size:42px">🔬</div><h3>العلوم</h3><p>مفاهيم علمية ومواقف وتفكير علمي.</p><div class="progress"><span id="scienceProg" style="width:0%"></span></div><button onclick="startQuiz('science')">ابدئي التدريب</button></div>
 <div class="subject math"><div style="font-size:42px">➗</div><h3>الرياضيات</h3><p>تدريبات حسابية ومسائل وتطبيقات.</p><div class="progress"><span id="mathProg" style="width:0%"></span></div><button onclick="startQuiz('math')">ابدئي التدريب</button></div>
 </div>
-<div class="panel">
-<h3>📚 التدريبات المنشورة</h3>
-<div id="studentWeeklyTask"><div class="empty">جارٍ تجهيز التدريبات المنشورة...</div></div>
-</div>
-<div class="panel"><h3>🏆 إنجازاتي</h3><div id="studentBadges"></div></div>
+<div class="panel"><h3>📈 ملخص رحلتي</h3><div id="studentBadges"></div></div>
 </section>
 
 <section id="quiz" class="screen">
@@ -628,13 +624,9 @@ function renderStudent(){
   document.getElementById('done').textContent=active.reduce((sum,x)=>sum+(Number(x.attempts)||0),0);
   document.getElementById('points').textContent=active.reduce((sum,x)=>sum+Math.max(0,Math.min(100,Number(x.score)||0)),0);
   subjects.forEach(x=>document.getElementById(x+'Prog').style.width=Math.max(0,Math.min(100,Number(r[x]?.score)||0))+'%');
-  let b=[];
-  if(vals.some(v=>v>=70))b.push('🌟 بداية موفقة');
-  if(vals.some(v=>v>=90))b.push('🏅 متفوقة');
-  if(active.length===3 && vals.every(v=>v>=80))b.push('🧭 سفيرة الفهم');
-  document.getElementById('badges').textContent=b.length;
   renderStudentWeekly();
-  document.getElementById('studentBadges').innerHTML=b.map(x=>`<span class="badge">${x}</span>`).join('')||'<span style="color:#777">أكملي أول تدريب لتحصلي على أول شارة.</span>';
+  const summaryBox=document.getElementById('studentBadges');
+  if(summaryBox && !summaryBox.innerHTML.trim()) summaryBox.innerHTML='<div class="empty">سيظهر هنا ملخص التدريبات المكتملة والنقاط والمواد التي تدربتِ عليها.</div>';
 }
 function startQuiz(sub){
 currentSubject=sub;
@@ -3101,14 +3093,9 @@ window.logoutStudent = async function(){
     document.getElementById('done').textContent=done;
     document.getElementById('points').textContent=points;
     subs.forEach(k=>{const el=document.getElementById(k+'Prog');if(el)el.style.width=vals[subs.indexOf(k)]+'%';});
-    const badges=[];
-    if(vals.some(v=>v>=70))badges.push('🌟 بداية موفقة');
-    if(vals.some(v=>v>=90))badges.push('🏅 متفوقة');
-    if(active.length===3 && vals.every(v=>v>=80))badges.push('🧭 سفيرة الفهم');
-    document.getElementById('badges').textContent=badges.length;
     if(typeof renderStudentWeekly==='function')renderStudentWeekly();
-    const b=document.getElementById('studentBadges');
-    if(b)b.innerHTML=badges.map(x=>`<span class="badge">${x}</span>`).join('')||'<span style="color:#777">أكملي أول تدريب لتحصلي على أول شارة.</span>';
+    const summaryBox=document.getElementById('studentBadges');
+    if(summaryBox && !summaryBox.innerHTML.trim()) summaryBox.innerHTML='<div class="empty">سيظهر هنا ملخص التدريبات المكتملة والنقاط والمواد التي تدربتِ عليها.</div>';
   };
 
   window.finishQuiz = finishQuiz = async function(){
@@ -3486,31 +3473,24 @@ window.logoutStudent = async function(){
     const done=completedCountFor(r);
     const subjects=['reading','science','math'];
     const finishedSubjects=subjects.filter(key=>Number(r[key]?.attempts||0)>0);
-    const best=Math.max(0,...subjects.map(key=>Math.max(0,Math.min(100,Number(r[key]?.score)||0))));
-    const points=Number.isFinite(Number(r.totalPoints))?Math.max(0,Number(r.totalPoints)):history.reduce((sum,a)=>sum+Math.max(0,Number(a.earnedPoints)||0),0);
-
-    const achievements=[];
-    if(done>=1) achievements.push({icon:'🚀',title:'أول خطوة',desc:'أكملتِ أول تدريب في رحلتك الرقمية.'});
-    if(done>=3) achievements.push({icon:'🔥',title:'المثابرة',desc:'أكملتِ ثلاثة تدريبات أو أكثر، وواصلتِ التعلم.'});
-    if(best>=90) achievements.push({icon:'🏅',title:'أداء متميز',desc:'حققتِ نتيجة لا تقل عن 90% في إحدى المواد.'});
-    if(finishedSubjects.length>=2) achievements.push({icon:'📚',title:'تنوع معرفي',desc:'خضتِ تدريبات في مادتين مختلفتين.'});
-    if(finishedSubjects.length===3) achievements.push({icon:'🧭',title:'مستكشفة بوصلة الفهم',desc:'أكملتِ تدريبات في القراءة والعلوم والرياضيات.'});
-
-    const badgeCount=document.getElementById('badges');
-    if(badgeCount) badgeCount.textContent=achievements.length;
-    const progressText = done===0
-      ? 'إنجازك القادم: أكملي أول تدريب لتحصلي على شارة «أول خطوة».'
+    const points=Number.isFinite(Number(r.totalPoints))
+      ? Math.max(0,Number(r.totalPoints))
+      : history.reduce((sum,a)=>sum+Math.max(0,Number(a.earnedPoints)||0),0);
+    const materialNames={reading:'القراءة',science:'العلوم',math:'الرياضيات'};
+    const finishedNames=finishedSubjects.map(key=>materialNames[key]).join('، ')||'لم تبدئي أي مادة بعد';
+    const nextStep=done===0
+      ? 'ابدئي بأحد التدريبات المنشورة ليظهر تقدمك هنا.'
       : finishedSubjects.length<3
-        ? 'إنجازك القادم: جرّبي مادة أخرى لفتح شارة «تنوع معرفي» ثم «مستكشفة بوصلة الفهم».'
-        : best<90
-          ? 'إنجازك القادم: احصلي على 90% أو أكثر لفتح شارة «أداء متميز».'
-          : 'رائع! واصلي التعلم للمحافظة على تقدمك وفتح إنجازات جديدة.';
-
-    const summary=`<div class="notice" style="margin-top:0"><b>ملخص إنجازاتك:</b> ${done} تدريب مكتمل · ${finishedSubjects.length} من 3 مواد · ${Math.round(points)} نقطة مكتسبة</div>`;
-    const cards=achievements.length
-      ? `<div class="achievement-list">${achievements.map(a=>`<div class="achievement-item"><div class="achievement-icon">${a.icon}</div><div><strong>${a.title}</strong><p>${a.desc}</p></div></div>`).join('')}</div>`
-      : '<div class="empty">لم تحصلي على شارة بعد. ستظهر إنجازاتك هنا بعد إكمال التدريبات وتحقيق التقدم في المواد.</div>';
-    box.innerHTML=summary+cards+`<div class="achievement-next">${progressText}</div>`;
+        ? 'واصلي رحلتك بتجربة تدريب منشور في مادة أخرى.'
+        : 'أكملتِ تدريبات في المواد الثلاث. واصلي متابعة نتائجك.';
+    box.innerHTML=`
+      <div class="stats journey-summary-stats" style="grid-template-columns:repeat(3,minmax(0,1fr));margin:0 0 14px">
+        <div class="stat">التدريبات المكتملة<b>${done}</b></div>
+        <div class="stat">المواد التي تدربتِ عليها<b>${finishedSubjects.length} / 3</b></div>
+        <div class="stat">النقاط المكتسبة<b>${Math.round(points)}</b></div>
+      </div>
+      <div class="notice" style="margin:0 0 10px"><b>المواد:</b> ${esc(finishedNames)}</div>
+      <div class="training-meta">${esc(nextStep)}</div>`;
   }
 
   function formatDate(value){
@@ -3582,12 +3562,10 @@ window.logoutStudent = async function(){
     }
   };
 
-  // Keep the achievements fresh whenever the student dashboard is painted.
+  // Keep the student progress summary fresh whenever the dashboard is painted.
   const previousRenderStudent=window.renderStudent||renderStudent;
   window.renderStudent=renderStudent=function(){
     previousRenderStudent();
-    // The previous renderer already calls renderStudentWeekly; update the achievements
-    // synchronously after its legacy markup so the new meaningful badges remain visible.
     renderStudentAchievements();
   };
 
