@@ -90,8 +90,8 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px;border-bottom:1px s
 <div class="subject math"><div style="font-size:42px">➗</div><h3>الرياضيات</h3><p>تدريبات حسابية ومسائل وتطبيقات.</p><div class="progress"><span id="mathProg" style="width:0%"></span></div><button onclick="startQuiz('math')">ابدئي التدريب</button></div>
 </div>
 <div class="panel">
-<h3>📅 مهمة هذا الأسبوع</h3>
-<div id="studentWeeklyTask"><div class="empty">لا توجد مهمة منشورة لهذا الأسبوع حاليًا.</div></div>
+<h3>📚 التدريبات المنشورة</h3>
+<div id="studentWeeklyTask"><div class="empty">جارٍ تجهيز التدريبات المنشورة...</div></div>
 </div>
 <div class="panel"><h3>🏆 إنجازاتي</h3><div id="studentBadges"></div></div>
 </section>
@@ -3433,6 +3433,169 @@ window.logoutStudent = async function(){
       loadCloudAdminResults().then(()=>renderResultsTable()).catch(e=>console.warn('refresh results tab:',e));
     }
   };
+})();
+</script>
+
+
+<style>
+/* Student journey: active published tasks and earned achievements */
+.student-training-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:12px}
+.student-training-card{border:1px solid #e9e1f4;border-radius:17px;padding:17px;background:linear-gradient(180deg,#fff,#fcfaff);display:flex;flex-direction:column;gap:9px;min-width:0}
+.student-training-card .training-title{font-weight:800;color:#594190;font-size:17px}
+.student-training-card .training-meta{font-size:13px;color:#777083;line-height:1.8}
+.student-training-card .training-status{display:inline-flex;align-self:flex-start;align-items:center;gap:6px;border-radius:30px;padding:5px 11px;font-size:12px;font-weight:700}
+.student-training-card .training-status.available{background:#e8f7ed;color:#237442}
+.student-training-card .training-status.completed{background:#eee8f8;color:#6f55a6}
+.student-training-card button{margin-top:auto;width:100%}
+.student-training-card button:disabled{background:#efedf3;color:#777;cursor:not-allowed}
+.achievement-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
+.achievement-item{border:1px solid #eed9e9;border-radius:16px;background:#fffafd;padding:15px;display:flex;gap:12px;align-items:flex-start}
+.achievement-item .achievement-icon{font-size:27px;line-height:1.3}
+.achievement-item strong{display:block;color:#714a83;margin-bottom:4px}
+.achievement-item p{margin:0;color:#777083;font-size:13px;line-height:1.8}
+.achievement-next{margin-top:14px;padding:12px 15px;border-radius:13px;background:#f5f0ff;color:#5d479c;font-size:13px;line-height:1.8}
+@media(max-width:650px){.student-training-list,.achievement-list{grid-template-columns:1fr}}
+</style>
+<script>
+/* إصلاح أقسام الطالبة: عرض التدريبات النشطة فعليًا والإنجازات المحسوبة من نتائج Supabase */
+(function installStudentJourneyPanels(){
+  if(window.__bfStudentJourneyPanelsV1) return;
+  window.__bfStudentJourneyPanelsV1 = true;
+  let renderSeq = 0;
+
+  function esc(value){
+    return typeof escapeHtml === 'function'
+      ? escapeHtml(String(value ?? ''))
+      : String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+  }
+  function studentRecord(){
+    if(!student?.name) return {};
+    return (results && results[student.name]) || {};
+  }
+  function completedCountFor(r){
+    const fromHistory = Array.isArray(r.attemptHistory) ? r.attemptHistory.length : 0;
+    const fromSubjects = ['reading','science','math'].reduce((sum,key)=>sum+Math.max(0,Number(r[key]?.attempts)||0),0);
+    return Math.max(fromHistory,fromSubjects);
+  }
+
+  function renderStudentAchievements(){
+    const box=document.getElementById('studentBadges');
+    if(!box) return;
+    const r=studentRecord();
+    const history=Array.isArray(r.attemptHistory)?r.attemptHistory:[];
+    const done=completedCountFor(r);
+    const subjects=['reading','science','math'];
+    const finishedSubjects=subjects.filter(key=>Number(r[key]?.attempts||0)>0);
+    const best=Math.max(0,...subjects.map(key=>Math.max(0,Math.min(100,Number(r[key]?.score)||0))));
+    const points=Number.isFinite(Number(r.totalPoints))?Math.max(0,Number(r.totalPoints)):history.reduce((sum,a)=>sum+Math.max(0,Number(a.earnedPoints)||0),0);
+
+    const achievements=[];
+    if(done>=1) achievements.push({icon:'🚀',title:'أول خطوة',desc:'أكملتِ أول تدريب في رحلتك الرقمية.'});
+    if(done>=3) achievements.push({icon:'🔥',title:'المثابرة',desc:'أكملتِ ثلاثة تدريبات أو أكثر، وواصلتِ التعلم.'});
+    if(best>=90) achievements.push({icon:'🏅',title:'أداء متميز',desc:'حققتِ نتيجة لا تقل عن 90% في إحدى المواد.'});
+    if(finishedSubjects.length>=2) achievements.push({icon:'📚',title:'تنوع معرفي',desc:'خضتِ تدريبات في مادتين مختلفتين.'});
+    if(finishedSubjects.length===3) achievements.push({icon:'🧭',title:'مستكشفة بوصلة الفهم',desc:'أكملتِ تدريبات في القراءة والعلوم والرياضيات.'});
+
+    const badgeCount=document.getElementById('badges');
+    if(badgeCount) badgeCount.textContent=achievements.length;
+    const progressText = done===0
+      ? 'إنجازك القادم: أكملي أول تدريب لتحصلي على شارة «أول خطوة».'
+      : finishedSubjects.length<3
+        ? 'إنجازك القادم: جرّبي مادة أخرى لفتح شارة «تنوع معرفي» ثم «مستكشفة بوصلة الفهم».'
+        : best<90
+          ? 'إنجازك القادم: احصلي على 90% أو أكثر لفتح شارة «أداء متميز».'
+          : 'رائع! واصلي التعلم للمحافظة على تقدمك وفتح إنجازات جديدة.';
+
+    const summary=`<div class="notice" style="margin-top:0"><b>ملخص إنجازاتك:</b> ${done} تدريب مكتمل · ${finishedSubjects.length} من 3 مواد · ${Math.round(points)} نقطة مكتسبة</div>`;
+    const cards=achievements.length
+      ? `<div class="achievement-list">${achievements.map(a=>`<div class="achievement-item"><div class="achievement-icon">${a.icon}</div><div><strong>${a.title}</strong><p>${a.desc}</p></div></div>`).join('')}</div>`
+      : '<div class="empty">لم تحصلي على شارة بعد. ستظهر إنجازاتك هنا بعد إكمال التدريبات وتحقيق التقدم في المواد.</div>';
+    box.innerHTML=summary+cards+`<div class="achievement-next">${progressText}</div>`;
+  }
+
+  function formatDate(value){
+    if(!value) return '';
+    const d=new Date(value);
+    if(Number.isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('ar-SA-u-ca-gregory',{day:'numeric',month:'short',year:'numeric'}).format(d);
+  }
+
+  function paintPublishedTasks(box){
+    const active=window.__bfActiveTasksBySubject||{};
+    const cache=window.__bfStudentPoolCache instanceof Map ? window.__bfStudentPoolCache : new Map();
+    const completed=window.__bfCompletedTaskIds instanceof Set ? window.__bfCompletedTaskIds : new Set();
+    const attemptsByTask=window.__bfAttemptsByTask||{};
+    const order=['reading','science','math'];
+    const cards=[];
+    order.forEach(sub=>{
+      const task=active[sub];
+      if(!task) return;
+      const pool=cache.get(String(task.id));
+      const qCount=Array.isArray(pool?.published)?pool.published.length:null;
+      const oldAttempt=attemptsByTask[String(task.id)];
+      const isDone=completed.has(String(task.id)) || Boolean(oldAttempt?.completed_at);
+      const label=({reading:'القراءة',science:'العلوم',math:'الرياضيات'})[sub]||sub;
+      const title=task.title||(`${label} — تدريب منشور`);
+      const publishedOn=formatDate(task.published_at||task.created_at);
+      cards.push(`<article class="student-training-card">
+        <div class="training-title">${sub==='reading'?'📖':sub==='science'?'🔬':'➗'} ${esc(label)}</div>
+        <div><b>${esc(title)}</b></div>
+        <div class="training-meta">${qCount===null?'أسئلة التدريب قيد التحميل':`${qCount} ${qCount===1?'سؤال':'أسئلة'}`}${publishedOn?' · نُشر '+esc(publishedOn):''}</div>
+        <span class="training-status ${isDone?'completed':'available'}">${isDone?'✓ تم الإنجاز':'● متاح للحل'}</span>
+        <button class="${isDone?'secondary':''}" ${isDone?'disabled':''} onclick="startQuiz('${sub}')">${isDone?'تم حل التدريب':'بدء التدريب'}</button>
+      </article>`);
+    });
+    if(cards.length){
+      box.innerHTML=`<div class="training-meta">هذه هي التدريبات المنشورة حاليًا من المعلمات. لا يوجد جدول أسبوعي ثابت؛ تظهر المهمة عند نشر تدريب جديد.</div><div class="student-training-list">${cards.join('')}</div>`;
+      return true;
+    }
+    return false;
+  }
+
+  window.renderStudentWeekly = renderStudentWeekly = async function(){
+    const box=document.getElementById('studentWeeklyTask')||document.getElementById('studentWeekly');
+    renderStudentAchievements();
+    if(!box) return;
+    const seq=++renderSeq;
+    if(!studentAuthUser?.id){
+      box.innerHTML='<div class="empty">سجّلي الدخول للطالبة لعرض التدريبات المنشورة.</div>';
+      return;
+    }
+    const renderedNow=paintPublishedTasks(box);
+    if(!renderedNow) box.innerHTML='<div class="empty">⏳ جارٍ تحميل التدريبات المنشورة...</div>';
+
+    try{
+      if(typeof window.__bfPreloadStudentPools==='function'){
+        await window.__bfPreloadStudentPools(false);
+      }
+      if(seq!==renderSeq) return;
+      const found=paintPublishedTasks(box);
+      if(!found){
+        box.innerHTML='<div class="empty">لا توجد تدريبات منشورة حاليًا. ستظهر التدريبات هنا عندما تنشر المعلمة تدريبًا جديدًا.</div>';
+      }
+      renderStudentAchievements();
+    }catch(e){
+      console.warn('student published tasks panel:',e);
+      if(seq===renderSeq && !renderedNow){
+        box.innerHTML='<div class="empty">تعذر تحميل التدريبات المنشورة الآن. حدّثي الصفحة وحاولي مرة أخرى.</div>';
+      }
+    }
+  };
+
+  // Keep the achievements fresh whenever the student dashboard is painted.
+  const previousRenderStudent=window.renderStudent||renderStudent;
+  window.renderStudent=renderStudent=function(){
+    previousRenderStudent();
+    // The previous renderer already calls renderStudentWeekly; update the achievements
+    // synchronously after its legacy markup so the new meaningful badges remain visible.
+    renderStudentAchievements();
+  };
+
+  // Rename the old weekly block; the school uses publish/stop, not fixed week scheduling.
+  const weeklyBox=document.getElementById('studentWeeklyTask');
+  const title=weeklyBox?.closest('.panel')?.querySelector('h3');
+  if(title) title.textContent='📚 التدريبات المنشورة';
+  renderStudentAchievements();
 })();
 </script>
 
