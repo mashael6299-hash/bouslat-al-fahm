@@ -134,7 +134,20 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px;border-bottom:1px s
 </select>
 </div>
 </div>
-<table><thead><tr><th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th><th>آخر تاريخ حل</th><th>تفاصيل الحل</th></tr></thead><tbody id="resultsTable"></tbody></table><div id="attemptDetailsPanel" class="panel" style="margin-top:22px;border:1px solid #eadff5;box-shadow:none;display:none"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">📝 تفاصيل حل الطالبة</h3><button class="secondary no-print" onclick="closeAttemptDetails()">إغلاق</button></div><div id="attemptDetailsOutput" style="margin-top:15px"></div></div></div>
+<div class="no-print" style="display:flex;gap:15px;flex-wrap:wrap;margin:-4px 0 18px">
+<div style="max-width:260px;flex:1;min-width:210px">
+<label for="resultDateFrom"><b>تاريخ الحل من</b></label>
+<input type="date" id="resultDateFrom" class="input" aria-label="تاريخ الحل من" onchange="renderResultsTable()">
+</div>
+<div style="max-width:260px;flex:1;min-width:210px">
+<label for="resultDateTo"><b>تاريخ الحل إلى</b></label>
+<input type="date" id="resultDateTo" class="input" aria-label="تاريخ الحل إلى" onchange="renderResultsTable()">
+</div>
+<div style="align-self:end">
+<button type="button" class="secondary" onclick="document.getElementById('resultDateFrom').value='';document.getElementById('resultDateTo').value='';renderResultsTable()">مسح تصفية التاريخ</button>
+</div>
+</div>
+<table><thead><tr><th>الطالبة</th><th>الصف</th><th>القراءة (نقاط)</th><th>العلوم (نقاط)</th><th>الرياضيات (نقاط)</th><th>تاريخ الحل</th><th>تفاصيل الحل</th></tr></thead><tbody id="resultsTable"></tbody></table><div id="attemptDetailsPanel" class="panel" style="margin-top:22px;border:1px solid #eadff5;box-shadow:none;display:none"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">📝 تفاصيل حل الطالبة</h3><button class="secondary no-print" onclick="closeAttemptDetails()">إغلاق</button></div><div id="attemptDetailsOutput" style="margin-top:15px"></div></div></div>
 
 <div id="create" class="teacherTab panel" style="display:none">
 <h3>✏️ إنشاء تدريب جديد</h3>
@@ -907,7 +920,7 @@ function printBlock(el,title){
   body{font-family:Arial,sans-serif;padding:30px;color:#222}h1,h2,h3{text-align:center;color:#5d479c}.print-date{text-align:left;font-weight:700;margin:0 0 14px;color:#444}
   table{width:100%;border-collapse:collapse;margin:20px 0}th,td{border:1px solid #ccc;padding:9px;text-align:right}th{background:#f2edf9}
   .chart-wrap{border:1px solid #ddd;border-radius:12px;padding:15px;margin:20px 0}.chart-bars{display:flex;align-items:flex-end;gap:18px;height:220px;padding:25px 10px 5px;border-bottom:1px solid #aaa}.chart-col{flex:1;text-align:center}.chart-bar{margin:auto;width:50px;background:#7657c8;border-radius:10px 10px 0 0;position:relative}.chart-bar span{position:absolute;top:-24px;left:0;right:0}.chart-label{font-size:12px;margin-top:6px}.stat{display:inline-block;border:1px solid #ddd;padding:12px;margin:5px;border-radius:10px}
-  .no-print,button,select,label{display:none!important}
+  .no-print,button,select,label,input[type="date"]{display:none!important}
   </style></head><body><h2>${title}</h2>${dateLine}${el.innerHTML}</body></html>`);
   w.document.close();w.focus();setTimeout(()=>w.print(),250);
 }
@@ -1832,10 +1845,10 @@ async function loadCloudAdminResults(){
   }catch(e){console.warn('cloud results:',e);}
 }
 
-async function viewStudentLatestAttempt(studentId,subjectKey){
+async function viewStudentLatestAttempt(studentId,subjectKey,preferredAttemptId=null){
   const panel=document.getElementById('attemptDetailsPanel'),out=document.getElementById('attemptDetailsOutput');if(!panel||!out)return;panel.style.display='block';out.innerHTML='<div class="notice">⏳ جارٍ تحميل تفاصيل حل الطالبة...</div>';
   try{
-    let aq=supabaseClient.from('attempts').select('id,student_id,task_id,score,total,started_at,completed_at').eq('student_id',studentId).order('completed_at',{ascending:false});
+    let aq=supabaseClient.from('attempts').select('id,student_id,task_id,score,total,started_at,completed_at').eq('student_id',studentId).order('completed_at',{ascending:false});if(preferredAttemptId)aq=aq.eq('id',Number(preferredAttemptId));
     const ar=await withTimeout(aq,10000);if(ar.error)throw ar.error;let attempts=ar.data||[];
     const taskIds=[...new Set(attempts.map(a=>Number(a.task_id)).filter(Number.isFinite))];let tasks=[];
     if(taskIds.length){const tr=await supabaseClient.from('tasks').select('id,subject_id,title').in('id',taskIds);if(tr.error)throw tr.error;tasks=tr.data||[];}
@@ -1850,7 +1863,7 @@ async function viewStudentLatestAttempt(studentId,subjectKey){
     const letter={A:0,B:1,C:2,D:3};
     const rows=(ansRes.data||[]).map((a,i)=>{const q=qm[String(a.question_id)]||{};const opts=[q.option_a,q.option_b,q.option_c,q.option_d];const si=letter[String(a.selected_answer||'').toUpperCase()]??-1;const ci=Number.isInteger(Number(q.correct_index))?Number(q.correct_index):(letter[String(q.correct_answer||'').toUpperCase()]??0);return `<tr><td>${i+1}</td><td>${escapeHtml(q.question_text||'')}</td><td>${escapeHtml(si>=0?String((opts[si] ?? a.selected_answer) ?? '-'):'-')}</td><td>${escapeHtml(String(opts[ci]??q.correct_answer??'-'))}</td><td>${a.is_correct?'✅ صحيحة':'❌ خاطئة'}</td></tr>`}).join('');
     const studentName=cloudStudentProfiles.find(p=>String(p.id)===String(studentId))?.full_name||'الطالبة';
-    out.innerHTML=`<div class="notice"><b>الطالبة:</b> ${escapeHtml(studentName)} &nbsp; <b>المادة:</b> ${names[sub]||sub||'-'} &nbsp; <b>النتيجة:</b> ${pctFromAttempt(attempt)}% &nbsp; <b>الدرجة:</b> ${Number(attempt.score)||0}/${Number(attempt.total)||0} &nbsp; <b>التاريخ:</b> ${attempt.completed_at?new Date(attempt.completed_at).toLocaleString('ar-SA'):'-'}</div><table><thead><tr><th>#</th><th>السؤال</th><th>إجابة الطالبة</th><th>الإجابة الصحيحة</th><th>النتيجة</th></tr></thead><tbody>${rows||'<tr><td colspan="5">لم تُحفظ تفاصيل الإجابات.</td></tr>'}</tbody></table>`;
+    out.innerHTML=`<div class="notice"><b>الطالبة:</b> ${escapeHtml(studentName)} &nbsp; <b>المادة:</b> ${names[sub]||sub||'-'} &nbsp; <b>النتيجة بالنقاط:</b> ${Number(attempt.score)||0} من ${Number(attempt.total)||0} &nbsp; <b>التاريخ:</b> ${attempt.completed_at?new Date(attempt.completed_at).toLocaleString('ar-SA'):'-'}</div><table><thead><tr><th>#</th><th>السؤال</th><th>إجابة الطالبة</th><th>الإجابة الصحيحة</th><th>النتيجة</th></tr></thead><tbody>${rows||'<tr><td colspan="5">لم تُحفظ تفاصيل الإجابات.</td></tr>'}</tbody></table>`;
     panel.scrollIntoView({behavior:'smooth',block:'start'});
   }catch(e){console.warn('attempt details:',e);out.innerHTML='<div class="notice" style="color:#b42318">❌ تعذر تحميل تفاصيل الحل: '+escapeHtml(e?.message||'خطأ غير معروف')+'</div>'}
 }
@@ -3260,7 +3273,8 @@ window.logoutStudent = async function(){
         subjectResult.last = pct;
         row.attemptHistory.push({
           attemptId:a.id, taskId:a.task_id, subject:sub, score:pct,
-          total:Number(a.total)||0, completedAt:a.completed_at||a.started_at||null,
+          points:Number(a.score)||0, total:Number(a.total)||0,
+          completedAt:a.completed_at||a.started_at||null,
           title:a.title || names[sub]
         });
       });
@@ -3291,41 +3305,72 @@ window.logoutStudent = async function(){
       subjectSelect.value = teacherSubject;
       subjectFilter = teacherSubject;
     }
-
+    const dateFrom = document.getElementById('resultDateFrom')?.value || '';
+    const dateTo = document.getElementById('resultDateTo')?.value || '';
+    const dateValue = h => h?.completedAt || h?.created_at || h?.started_at || null;
+    const dateKey = value => {
+      if (!value) return '';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return '';
+      const pad = n => String(n).padStart(2,'0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    };
     const formatResultDate = value => {
       if (!value) return '-';
       const d = new Date(value);
       if (Number.isNaN(d.getTime())) return '-';
       return new Intl.DateTimeFormat('ar-SA-u-ca-gregory', {year:'numeric', month:'2-digit', day:'2-digit'}).format(d);
     };
-    const lastAttemptDate = (r, subject = null) => {
-      const history = Array.isArray(r?.attemptHistory) ? r.attemptHistory : [];
-      const candidates = history.filter(h => (!subject || h.subject === subject) && (h.completedAt || h.created_at || h.started_at));
-      if (!candidates.length) return '-';
-      candidates.sort((a,b) => new Date(b.completedAt || b.created_at || b.started_at || 0).getTime() - new Date(a.completedAt || a.created_at || a.started_at || 0).getTime());
-      return formatResultDate(candidates[0].completedAt || candidates[0].created_at || candidates[0].started_at);
+    const inDateRange = h => {
+      const key = dateKey(dateValue(h));
+      if (!key) return false;
+      if (dateFrom && key < dateFrom) return false;
+      if (dateTo && key > dateTo) return false;
+      return true;
     };
-
+    const latest = list => [...list].sort((a,b)=>new Date(dateValue(b)||0).getTime()-new Date(dateValue(a)||0).getTime())[0] || null;
+    const pointsText = h => {
+      if (!h) return '-';
+      const total = Math.max(0, Number(h.total)||0);
+      const points = h.points != null
+        ? Math.max(0, Number(h.points)||0)
+        : Math.max(0, Math.min(total, Math.round((Number(h.score)||0) * total / 100)));
+      return `<b>${points} / ${total}</b> ${total === 1 ? 'نقطة' : 'نقاط'}`;
+    };
     const byId = window.__bfCloudResultsById || {};
-    let rows = (cloudStudentProfiles || []).map(p => ({p, r:byId[String(p.id)] || results[p.full_name || '']})).filter(x => x.r);
+    let rows = (cloudStudentProfiles || [])
+      .map(p => ({p, r:byId[String(p.id)] || results[p.full_name || '']}))
+      .filter(x => x.r);
     if (classFilter !== 'all') rows = rows.filter(x => String(x.r.class || '') === classFilter);
+    rows = rows.map(x => {
+      const history = Array.isArray(x.r.attemptHistory) ? x.r.attemptHistory : [];
+      const filtered = history.filter(h =>
+        (subjectFilter === 'all' || h.subject === subjectFilter) && inDateRange(h)
+      );
+      return {...x, filteredHistory:filtered};
+    }).filter(x => x.filteredHistory.length > 0);
+
     const head = document.querySelector('#dashboard table thead tr');
     if (subjectFilter === 'all'){
-      if (head) head.innerHTML = '<th>الطالبة</th><th>الصف</th><th>القراءة</th><th>العلوم</th><th>الرياضيات</th><th>المتوسط</th><th>آخر تاريخ حل</th><th>تفاصيل الحل</th>';
-      body.innerHTML = rows.map(({p,r}) => {
-        const subs=['reading','science','math'];
-        const vals=subs.map(sub => Number(r[sub]?.score)||0);
-        const active=subs.filter(sub => Number(r[sub]?.attempts)>0).map(sub => Number(r[sub].score)||0);
-        const avg=active.length ? Math.round(active.reduce((a,b)=>a+b,0)/active.length) : 0;
-        const has=active.length>0;
-        return `<tr><td><b>${escapeHtml(r.name || p.full_name || 'طالبة')}</b></td><td>${escapeHtml(r.class || '-')}</td><td>${vals[0]}%</td><td>${vals[1]}%</td><td>${vals[2]}%</td><td><b>${avg}%</b></td><td>${lastAttemptDate(r)}</td><td>${has?`<button class="secondary" onclick="viewStudentLatestAttempt('${p.id}','')">عرض الحل</button>`:'-'}</td></tr>`;
-      }).join('') || `<tr><td colspan="8" class="empty">${window.__bfResultsLoadError ? 'تعذر تحميل النتائج: '+escapeHtml(window.__bfResultsLoadError) : 'لا توجد محاولات مكتملة محفوظة في قاعدة البيانات حتى الآن.'}</td></tr>`;
-    }else{
-      if (head) head.innerHTML = '<th>الطالبة</th><th>الصف</th><th>المادة</th><th>النتيجة</th><th>تاريخ آخر حل</th><th>تفاصيل الحل</th>';
-      body.innerHTML = rows.map(({p,r}) => {
-        const val=r[subjectFilter]||{score:0,attempts:0};
-        return `<tr><td><b>${escapeHtml(r.name || p.full_name || 'طالبة')}</b></td><td>${escapeHtml(r.class || '-')}</td><td>${names[subjectFilter]||subjectFilter}</td><td><b>${Number(val.score)||0}%</b></td><td>${lastAttemptDate(r, subjectFilter)}</td><td>${Number(val.attempts)>0?`<button class="secondary" onclick="viewStudentLatestAttempt('${p.id}','${subjectFilter}')">عرض الحل</button>`:'-'}</td></tr>`;
-      }).join('') || `<tr><td colspan="6" class="empty">${window.__bfResultsLoadError ? 'تعذر تحميل النتائج: '+escapeHtml(window.__bfResultsLoadError) : 'لا توجد نتائج لهذه المادة حتى الآن.'}</td></tr>`;
+      if (head) head.innerHTML = '<th>الطالبة</th><th>الصف</th><th>القراءة (نقاط)</th><th>العلوم (نقاط)</th><th>الرياضيات (نقاط)</th><th>تاريخ الحل</th><th>تفاصيل الحل</th>';
+      body.innerHTML = rows.map(({p,r,filteredHistory}) => {
+        const latestBySubject = sub => latest(filteredHistory.filter(h => h.subject === sub));
+        const reading = latestBySubject('reading');
+        const science = latestBySubject('science');
+        const math = latestBySubject('math');
+        const last = latest(filteredHistory);
+        const details = last
+          ? `<button class="secondary" onclick="viewStudentLatestAttempt('${p.id}','${last.subject}','${last.attemptId}')">عرض الحل</button>`
+          : '-';
+        return `<tr><td><b>${escapeHtml(r.name || p.full_name || 'طالبة')}</b></td><td>${escapeHtml(r.class || '-')}</td><td>${pointsText(reading)}</td><td>${pointsText(science)}</td><td>${pointsText(math)}</td><td>${formatResultDate(dateValue(last))}</td><td>${details}</td></tr>`;
+      }).join('') || `<tr><td colspan="7" class="empty">${window.__bfResultsLoadError ? 'تعذر تحميل النتائج: '+escapeHtml(window.__bfResultsLoadError) : 'لا توجد نتائج ضمن تاريخ الحل المحدد.'}</td></tr>`;
+    } else {
+      if (head) head.innerHTML = '<th>الطالبة</th><th>الصف</th><th>المادة</th><th>النتيجة بالنقاط</th><th>تاريخ الحل</th><th>تفاصيل الحل</th>';
+      body.innerHTML = rows.map(({p,r,filteredHistory}) => {
+        const a = latest(filteredHistory.filter(h => h.subject === subjectFilter));
+        if (!a) return '';
+        return `<tr><td><b>${escapeHtml(r.name || p.full_name || 'طالبة')}</b></td><td>${escapeHtml(r.class || '-')}</td><td>${names[subjectFilter]||subjectFilter}</td><td>${pointsText(a)}</td><td>${formatResultDate(dateValue(a))}</td><td><button class="secondary" onclick="viewStudentLatestAttempt('${p.id}','${subjectFilter}','${a.attemptId}')">عرض الحل</button></td></tr>`;
+      }).join('') || `<tr><td colspan="6" class="empty">${window.__bfResultsLoadError ? 'تعذر تحميل النتائج: '+escapeHtml(window.__bfResultsLoadError) : 'لا توجد نتائج لهذه المادة ضمن تاريخ الحل المحدد.'}</td></tr>`;
     }
   };
 
