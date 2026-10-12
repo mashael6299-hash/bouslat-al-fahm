@@ -3170,128 +3170,157 @@ window.logoutStudent = async function(){
   if (window.__bfResultsTabFixV1) return;
   window.__bfResultsTabFixV1 = true;
 
-  window.loadCloudAdminResults = loadCloudAdminResults = async function(){
-    if (!cloudReady || !cloudProfile || !['admin','teacher'].includes(cloudProfile.role)) return false;
-    try{
-      // Student profiles are not assigned a subject_id; filter results by task.subject_id instead.
-      const profilesReq = await withTimeout(
-        supabaseClient.from('profiles')
-          .select('id,full_name,role,class_id,subject_id')
-          .eq('role','student'),
-        10000
-      );
-      if (profilesReq.error) throw profilesReq.error;
-      let profiles = Array.isArray(profilesReq.data) ? profilesReq.data : [];
+  window.loadCloudAdminResults = loadCloudAdminResults = function(){
+    if (!cloudReady || !cloudProfile || !['admin','teacher'].includes(cloudProfile.role)) return Promise.resolve(false);
+    // The teacher dashboard and the Results tab may request data together. Reuse one request.
+    if (window.__bfResultsLoadPromise) return window.__bfResultsLoadPromise;
 
-      // The live schema identifies a subject through tasks, not necessarily attempts.subject_id.
-      const attemptsReq = await withTimeout(
-        supabaseClient.from('attempts')
-          .select('id,student_id,task_id,score,total,started_at,completed_at')
-          .order('completed_at', {ascending:false}),
-        10000
-      );
-      if (attemptsReq.error) throw attemptsReq.error;
-      const rawAttempts = Array.isArray(attemptsReq.data) ? attemptsReq.data : [];
-      const taskIds = [...new Set(rawAttempts.map(a => Number(a.task_id)).filter(Number.isFinite))];
-      let tasks = [];
-      if (taskIds.length){
-        const tasksReq = await withTimeout(
-          supabaseClient.from('tasks')
-            .select('id,subject_id,title,created_by,is_published,published_at,stopped_at')
-            .in('id', taskIds),
-          10000
-        );
-        if (tasksReq.error) throw tasksReq.error;
-        tasks = Array.isArray(tasksReq.data) ? tasksReq.data : [];
-      }
-      const taskMap = {};
-      tasks.forEach(t => { taskMap[String(t.id)] = t; });
-
-      let mappedAttempts = rawAttempts.map(a => {
-        const task = taskMap[String(a.task_id)] || {};
-        return {
-          ...a,
-          subject_id: task.subject_id ?? a.subject_id ?? null,
-          title: task.title || '',
-          created_at: a.completed_at || a.started_at || null
-        };
-      }).filter(a => a.subject_id != null);
-
-      // Teachers only see attempts belonging to their assigned subject; admins see all.
-      if (cloudProfile.role === 'teacher'){
-        mappedAttempts = mappedAttempts.filter(a => String(a.subject_id) === String(cloudProfile.subject_id));
-      }
-
-      // Make sure every student who has a visible attempt has a profile row, even if the initial
-      // student roster query was restricted by RLS.
-      const found = new Set(profiles.map(p => String(p.id)));
-      const missingIds = [...new Set(mappedAttempts.map(a => String(a.student_id)))].filter(id => !found.has(id));
-      if (missingIds.length){
-        const missingReq = await withTimeout(
-          supabaseClient.from('profiles')
-            .select('id,full_name,role,class_id,subject_id')
-            .in('id', missingIds),
-          8000
-        );
-        if (!missingReq.error && Array.isArray(missingReq.data)) profiles = profiles.concat(missingReq.data);
-      }
-
-      const profileMap = {};
-      profiles.forEach(p => { profileMap[String(p.id)] = p; });
-      // If a visible attempt has no readable profile, keep the result visible with a neutral label.
-      mappedAttempts.forEach(a => {
-        if (!profileMap[String(a.student_id)]){
-          const fallback = {id:a.student_id,full_name:'طالبة ' + String(a.student_id).slice(0,8),role:'student',class_id:null};
-          profileMap[String(a.student_id)] = fallback;
-          profiles.push(fallback);
+    window.__bfResultsLoadPromise = (async function(){
+      let stage = 'تحميل المحاولات';
+      try{
+        // Read attempts in small stable pages instead of one large payload.
+        // This avoids long PostgREST requests and response-size issues.
+        const rawAttempts = [];
+        const pageSize = 200;
+        const maxRows = 10000;
+        for (let from = 0; from < maxRows; from += pageSize){
+          const req = await withTimeout(
+            supabaseClient.from('attempts')
+              .select('id,student_id,task_id,score,total,started_at,completed_at')
+              .order('completed_at', {ascending:false, nullsFirst:false})
+              .order('id', {ascending:false})
+              .range(from, Math.min(from + pageSize - 1, maxRows - 1)),
+            9000
+          );
+          if (req.error) throw req.error;
+          const page = Array.isArray(req.data) ? req.data : [];
+          rawAttempts.push(...page);
+          if (page.length < pageSize) break;
         }
-      });
 
-      cloudStudentProfiles = profiles.filter(p => p.role === 'student' || !p.role);
-      cloudAttempts = mappedAttempts;
-      const byId = {};
-      cloudStudentProfiles.forEach(p => {
-        byId[String(p.id)] = {
-          id:p.id,
-          name:p.full_name || 'طالبة',
-          class:cloudClassNameById(p.class_id) || '-',
-          reading:{score:0,attempts:0},
-          science:{score:0,attempts:0},
-          math:{score:0,attempts:0},
-          domains:{},
-          attemptHistory:[]
+        // Load only tasks referenced by attempts and send IDs in bounded batches.
+        stage = 'ربط المحاولات بالتدريبات';
+        const taskIds = [...new Set(rawAttempts.map(a => Number(a.task_id)).filter(Number.isFinite))];
+        const taskMap = {};
+        const chunk = (arr, size) => {
+          const out = [];
+          for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+          return out;
         };
-      });
-      cloudAttempts.forEach(a => {
-        const row = byId[String(a.student_id)];
-        const sub = subjectKeyById(a.subject_id);
-        if (!row || !['reading','science','math'].includes(sub)) return;
-        const pct = pctFromAttempt(a);
-        const subjectResult = row[sub];
-        subjectResult.score = Math.max(Number(subjectResult.score)||0, pct);
-        subjectResult.attempts = (Number(subjectResult.attempts)||0) + 1;
-        subjectResult.last = pct;
-        row.attemptHistory.push({
-          attemptId:a.id, taskId:a.task_id, subject:sub, score:pct,
-          points:Number(a.score)||0, total:Number(a.total)||0,
-          completedAt:a.completed_at||a.started_at||null,
-          title:a.title || names[sub]
+        const idChunks = chunk(taskIds, 80);
+        for (let i = 0; i < idChunks.length; i += 3){
+          const resultsBatch = await Promise.all(idChunks.slice(i, i + 3).map(ids => withTimeout(
+            supabaseClient.from('tasks')
+              .select('id,subject_id,title,created_by,is_published,published_at,stopped_at')
+              .in('id', ids),
+            9000
+          )));
+          resultsBatch.forEach(req => {
+            if (req.error) throw req.error;
+            (req.data || []).forEach(t => { taskMap[String(t.id)] = t; });
+          });
+        }
+
+        let mappedAttempts = rawAttempts.map(a => {
+          const task = taskMap[String(a.task_id)] || {};
+          return {
+            ...a,
+            subject_id: task.subject_id ?? a.subject_id ?? null,
+            title: task.title || '',
+            created_at: a.completed_at || a.started_at || null
+          };
+        }).filter(a => a.subject_id != null);
+
+        // Teachers only see results for their own subject.
+        if (cloudProfile.role === 'teacher'){
+          mappedAttempts = mappedAttempts.filter(a => String(a.subject_id) === String(cloudProfile.subject_id));
+        }
+
+        // The Results table needs profiles for students who have attempts, not the entire school roster.
+        stage = 'تحميل أسماء الطالبات';
+        const studentIds = [...new Set(mappedAttempts.map(a => String(a.student_id)).filter(Boolean))];
+        const profileMap = {};
+        const studentIdChunks = chunk(studentIds, 80);
+        for (let i = 0; i < studentIdChunks.length; i += 3){
+          const profileBatch = await Promise.all(studentIdChunks.slice(i, i + 3).map(ids => withTimeout(
+            supabaseClient.from('profiles')
+              .select('id,full_name,role,class_id,subject_id')
+              .in('id', ids),
+            9000
+          )));
+          profileBatch.forEach(req => {
+            // A restricted profile query should not suppress the student's result; use a safe fallback below.
+            if (req.error) { console.warn('profiles batch:', req.error.message); return; }
+            (req.data || []).forEach(p => { profileMap[String(p.id)] = p; });
+          });
+        }
+
+        // Keep results visible even if profile RLS hides a name; never drop a saved attempt.
+        mappedAttempts.forEach(a => {
+          const id = String(a.student_id);
+          if (!profileMap[id]) profileMap[id] = {
+            id: a.student_id,
+            full_name: 'طالبة ' + id.slice(0, 8),
+            role: 'student',
+            class_id: null
+          };
         });
-      });
-      Object.values(byId).forEach(r => r.attemptHistory.sort((a,b) => String(b.completedAt||'').localeCompare(String(a.completedAt||''))));
-      window.__bfCloudResultsById = byId;
-      results = {};
-      Object.values(byId).forEach(r => { results[r.name] = r; });
-      localStorage.setItem('bf_results', JSON.stringify(results));
-      window.__bfResultsLoadError = null;
-      return true;
-    }catch(e){
-      console.error('loadCloudAdminResults corrected:', e);
-      window.__bfResultsLoadError = e?.message || 'تعذر تحميل النتائج من قاعدة البيانات.';
-      const body = document.getElementById('resultsTable');
-      if (body) body.innerHTML = `<tr><td colspan="7" class="empty" style="color:#b42318">تعذر تحميل النتائج: ${escapeHtml(window.__bfResultsLoadError)}</td></tr>`;
-      return false;
-    }
+
+        const profiles = Object.values(profileMap).filter(p => p.role === 'student' || !p.role);
+        cloudStudentProfiles = profiles;
+        cloudAttempts = mappedAttempts;
+
+        const byId = {};
+        profiles.forEach(p => {
+          byId[String(p.id)] = {
+            id:p.id,
+            name:p.full_name || 'طالبة',
+            class:cloudClassNameById(p.class_id) || '-',
+            reading:{score:0,attempts:0},
+            science:{score:0,attempts:0},
+            math:{score:0,attempts:0},
+            domains:{},
+            attemptHistory:[]
+          };
+        });
+        mappedAttempts.forEach(a => {
+          const row = byId[String(a.student_id)];
+          const sub = subjectKeyById(a.subject_id);
+          if (!row || !['reading','science','math'].includes(sub)) return;
+          const pct = pctFromAttempt(a);
+          const subjectResult = row[sub];
+          subjectResult.score = Math.max(Number(subjectResult.score)||0, pct);
+          subjectResult.attempts = (Number(subjectResult.attempts)||0) + 1;
+          subjectResult.last = pct;
+          row.attemptHistory.push({
+            attemptId:a.id,
+            taskId:a.task_id,
+            subject:sub,
+            score:pct,
+            points:Number(a.score)||0,
+            total:Number(a.total)||0,
+            completedAt:a.completed_at||a.started_at||null,
+            title:a.title || names[sub]
+          });
+        });
+        Object.values(byId).forEach(r => r.attemptHistory.sort((a,b) => String(b.completedAt||'').localeCompare(String(a.completedAt||''))));
+        window.__bfCloudResultsById = byId;
+        results = {};
+        Object.values(byId).forEach(r => { results[r.name] = r; });
+        localStorage.setItem('bf_results', JSON.stringify(results));
+        window.__bfResultsLoadError = null;
+        return true;
+      }catch(e){
+        console.error('loadCloudAdminResults failed at ' + stage + ':', e);
+        window.__bfResultsLoadError = stage + ': ' + (e?.message || 'تعذر تحميل البيانات.');
+        const body = document.getElementById('resultsTable');
+        if (body) body.innerHTML = `<tr><td colspan="7" class="empty" style="color:#b42318">تعذر تحميل النتائج (${escapeHtml(window.__bfResultsLoadError)}). أعيدي المحاولة بعد قليل.</td></tr>`;
+        return false;
+      }
+    })().finally(function(){
+      window.__bfResultsLoadPromise = null;
+    });
+    return window.__bfResultsLoadPromise;
   };
 
   window.renderResultsTable = renderResultsTable = function(){
