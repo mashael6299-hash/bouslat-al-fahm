@@ -2999,6 +2999,20 @@ window.logoutStudent = async function(){
         alert('لا توجد أسئلة منشورة في هذا القسم حاليًا.'); return;
       }
       let task=pool.task;
+      // Cross-session completion lock: same normalized student name + class + task.
+      // This supplements auth.uid locking because anonymous accounts can change between visits.
+      const stableCompletion = await window.__bfFindStableTaskCompletion(task.id);
+      if (stableCompletion) {
+        const when = stableCompletion.completed_at ? new Date(stableCompletion.completed_at).toLocaleString('ar-SA') : '';
+        completedTaskSet().add(String(task.id));
+        window.__bfAttemptsByTask[String(task.id)] = {
+          id: stableCompletion.attempt_id, task_id: task.id,
+          score: stableCompletion.score, total: stableCompletion.total,
+          completed_at: stableCompletion.completed_at
+        };
+        alert('🔒 تم حل هذا التدريب مسبقًا للطالبة في هذا الفصل. لا يمكنك الدخول إليه مرة أخرى حتى تنشر المعلمة تدريبًا جديدًا.' + (when ? '\n\nتاريخ الحل: ' + when : '') + '\n\nالنتيجة السابقة: ' + window.__bfStableAttemptPercent(stableCompletion) + '%');
+        return;
+      }
       // If this task was completed, refresh once to see whether the teacher has published a new task.
       if(!window.__bfAttemptCacheReady) await warmAttempts(true);
       if(!window.__bfAttemptCacheReady && typeof findCompletedAttemptForTask==='function'){
@@ -3115,6 +3129,16 @@ window.logoutStudent = async function(){
         document.getElementById('questionArea').innerHTML=`<div style="text-align:center;padding:35px"><div style="font-size:60px">⚠️</div><h2>نتيجتك ${pct}%</h2><p>لم تُحفظ النتيجة، لذا لم تُحتسب المحاولة مكتملة.</p><div class="notice" style="color:#b42318;text-align:right">سبب الحفظ: ${detail}</div><button onclick="show('student')">العودة إلى رحلتي</button></div>`;
         return;
       }
+      // Persist a second, name/class-based lock so a new anonymous auth UID cannot reopen the same task.
+      const stableLockResult = await window.__bfRegisterStableTaskCompletion({
+        taskId: currentTaskId,
+        subjectId: currentTaskSubjectId,
+        attemptId: save.attemptId,
+        score: correct,
+        total,
+        completedAt: now
+      });
+      const stableLockWarning = stableLockResult?.ok ? '' : 'حُفظت النتيجة، لكن تعذر تثبيت قفل إعادة الدخول حسب الاسم والفصل. تحققي من تنفيذ تحديث قاعدة البيانات المرفق.';
       // Mark the task completed immediately in memory; the DB unique constraint remains the final guard.
       completedTaskSet().add(String(currentTaskId));
       window.__bfAttemptsByTask[String(currentTaskId)]={id:save.attemptId,task_id:currentTaskId,subject_id:currentTaskSubjectId,score:correct,total,started_at:currentQuizStartedAt,completed_at:now};
@@ -3135,7 +3159,7 @@ window.logoutStudent = async function(){
       });
       results[student.name]=r;localStorage.setItem('bf_results',JSON.stringify(results));
       document.getElementById('quizHint').textContent='✅ تم حفظ نتيجتك وإجاباتك في قاعدة البيانات.';
-      document.getElementById('questionArea').innerHTML=`<div style="text-align:center;padding:35px"><div style="font-size:60px">🎉</div><h2>نتيجتك ${pct}%</h2><p>تم حفظ النتيجة والإجابات. يمكنك العودة إلى رحلتك والانتقال إلى مادة أخرى.</p><button onclick="show('student')">العودة إلى رحلتي</button></div>`;
+      document.getElementById('questionArea').innerHTML=`<div style="text-align:center;padding:35px"><div style="font-size:60px">🎉</div><h2>نتيجتك ${pct}%</h2><p>تم حفظ النتيجة والإجابات. يمكنك العودة إلى رحلتك والانتقال إلى مادة أخرى.</p>${stableLockWarning ? `<div class="notice" style="color:#b42318;text-align:right">${escapeHtml(stableLockWarning)}</div>` : ``}<button onclick="show('student')">العودة إلى رحلتي</button></div>`;
       // Background-only: do not delay the result screen or the next subject. Warm other material pools.
       window.__bfPreloadStudentPools(true).catch(e=>console.warn('post-attempt warmup:',e));
       warmAttempts(true).then(()=>{try{if(document.getElementById('student')?.classList.contains('active'))renderStudent();}catch(e){}});
@@ -3577,4 +3601,149 @@ window.logoutStudent = async function(){
 })();
 </script>
 
+<script>
+// ===== قفل موثوق حسب اسم الطالبة والفصل والتدريب =====
+(function installStableStudentTaskLock(){
+  if (window.__bfStableStudentTaskLockV1) return;
+  window.__bfStableStudentTaskLockV1 = true;
+
+  function normalizedStudentName(name){
+    return String(name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('ar');
+  }
+  function currentClassId(){
+    let id = studentCloudProfile?.class_id;
+    if (id != null && id !== '') return Number(id);
+    const cls = String(student?.class || '').trim();
+    const row = (window.cloudClasses || []).find(x => String(x.name || x.title || x.class_name || '').trim() === cls);
+    return row ? Number(row.id) : null;
+  }
+  function currentNameKey(){ return normalizedStudentName(student?.name || studentCloudProfile?.full_name || ''); }
+  function percentFromStableRow(row){
+    const score = Number(row?.score) || 0, total = Number(row?.total) || 0;
+    return total > 0 ? Math.max(0, Math.min(100, Math.round(score / total * 100))) : 0;
+  }
+  window.__bfStableAttemptPercent = percentFromStableRow;
+
+  window.__bfFindStableTaskCompletion = async function(taskId){
+    if (!studentAuthUser?.id || !student?.name) throw new Error('جلسة الطالبة غير فعالة. أعيدي الدخول قبل فتح التدريب.');
+    const key = currentNameKey(), classId = currentClassId();
+    if (!key || !Number.isFinite(classId)) throw new Error('تعذر تحديد اسم الطالبة والفصل للتحقق من المحاولة السابقة.');
+    const req = await withTimeout(
+      supabaseClient.from('student_task_completions')
+        .select('id,student_name_key,class_id,task_id,subject_id,attempt_id,score,total,completed_at,task_title')
+        .eq('student_name_key', key)
+        .eq('class_id', classId)
+        .eq('task_id', taskId)
+        .maybeSingle(),
+      7000
+    );
+    if (req.error){
+      console.warn('stable task completion lookup:', req.error);
+      if (/student_task_completions|schema cache|does not exist|could not find/i.test(String(req.error.message||''))) {
+        throw new Error('ميزة تثبيت المحاولة بعد إعادة الدخول تحتاج تحديث قاعدة البيانات. نفذي ملف SQL المرفق ثم أعيدي المحاولة.');
+      }
+      throw new Error('تعذر التحقق من إكمال التدريب: ' + (req.error.message || 'خطأ في قاعدة البيانات.'));
+    }
+    return req.data || null;
+  };
+
+  window.__bfRegisterStableTaskCompletion = async function(info){
+    try{
+      if (!studentAuthUser?.id || !student?.name) return {ok:false,error:'جلسة الطالبة غير فعالة.'};
+      const key = currentNameKey(), classId = currentClassId();
+      const subjectId = Number(info?.subjectId || currentTaskSubjectId || 0);
+      if (!key || !Number.isFinite(classId) || !Number.isFinite(subjectId) || !info?.taskId || !info?.attemptId) {
+        return {ok:false,error:'بيانات الطالبة أو التدريب غير مكتملة.'};
+      }
+      const subjectText = (window.names && names[currentSubject]) || currentSubject || 'تدريب';
+      const row = {
+        student_name_key:key,
+        class_id:classId,
+        task_id:Number(info.taskId),
+        subject_id:subjectId,
+        student_id:studentAuthUser.id,
+        attempt_id:Number(info.attemptId),
+        score:Number(info.score)||0,
+        total:Number(info.total)||0,
+        completed_at:info.completedAt || new Date().toISOString(),
+        task_title:subjectText
+      };
+      const resp = await withTimeout(supabaseClient.from('student_task_completions').insert(row), 8000);
+      if (resp.error){
+        if (String(resp.error.code||'') === '23505' || /duplicate key|unique constraint/i.test(String(resp.error.message||''))) return {ok:true,duplicate:true};
+        console.warn('stable task completion insert:', resp.error);
+        return {ok:false,error:resp.error.message || 'تعذر تسجيل قفل التدريب.'};
+      }
+      return {ok:true};
+    }catch(e){
+      console.warn('register stable task completion:',e);
+      return {ok:false,error:e?.message || 'تعذر تثبيت قفل التدريب.'};
+    }
+  };
+
+  // Merge completions for the same normalized name/class into the student's totals,
+  // even if a later anonymous login happens to receive a different auth UID.
+  window.__bfMergeStableStudentCompletions = async function(){
+    if (!studentAuthUser?.id || !student?.name) return false;
+    const key = currentNameKey(), classId = currentClassId();
+    if (!key || !Number.isFinite(classId)) return false;
+    const req = await withTimeout(
+      supabaseClient.from('student_task_completions')
+        .select('task_id,subject_id,attempt_id,score,total,completed_at,task_title')
+        .eq('student_name_key',key)
+        .eq('class_id',classId)
+        .order('completed_at',{ascending:false}),
+      8000
+    );
+    if (req.error){
+      console.warn('stable student progress:',req.error);
+      return false;
+    }
+    const previous = results[student.name] || {class:student.class};
+    const byTask = new Map();
+    (Array.isArray(previous.attemptHistory)?previous.attemptHistory:[]).forEach(a=>{
+      if(a?.taskId != null) byTask.set(String(a.taskId), {...a});
+    });
+    (req.data||[]).forEach(row=>{
+      const taskId = String(row.task_id);
+      const total = Number(row.total)||0, correct = Number(row.score)||0;
+      const normalized = {
+        attemptId:row.attempt_id, taskId:row.task_id,
+        subject:subjectKeyFromId(row.subject_id),
+        score:percentFromStableRow(row), earnedPoints:total>0?Math.max(0,Math.min(total,correct)):correct,
+        total, completedAt:row.completed_at||null,
+        title:row.task_title||names[subjectKeyFromId(row.subject_id)]||'تدريب'
+      };
+      const existing = byTask.get(taskId);
+      if (!existing || (!existing.attemptId && normalized.attemptId)) byTask.set(taskId, normalized);
+      if (!window.__bfCompletedTaskIds) window.__bfCompletedTaskIds = new Set();
+      window.__bfCompletedTaskIds.add(taskId);
+      window.__bfAttemptsByTask = window.__bfAttemptsByTask || {};
+      window.__bfAttemptsByTask[taskId] = {
+        id:row.attempt_id,task_id:row.task_id,score:correct,total,completed_at:row.completed_at
+      };
+    });
+    const history = Array.from(byTask.values()).sort((a,b)=>Date.parse(b.completedAt||0)-Date.parse(a.completedAt||0));
+    const r = {...previous,class:student.class||previous.class||'غير محدد',attemptHistory:history};
+    ['reading','science','math'].forEach(sub=>{
+      const items=history.filter(a=>a.subject===sub);
+      if(items.length){
+        r[sub]={score:Math.max(...items.map(a=>Number(a.score)||0)),attempts:items.length,last:Number(items[0].score)||0};
+      }else if(!r[sub]) r[sub]={score:0,attempts:0};
+    });
+    r.totalPoints=history.reduce((sum,a)=>sum+Math.max(0,Number(a.earnedPoints)||0),0);
+    results[student.name]=r;
+    localStorage.setItem('bf_results',JSON.stringify(results));
+    return true;
+  };
+
+  // Keep current-UID attempt data, then merge the stable name/class registry.
+  const priorLoadResults = window.loadStudentCloudResults || loadStudentCloudResults;
+  window.loadStudentCloudResults = loadStudentCloudResults = async function(){
+    let ok=false;
+    try{ok=await priorLoadResults();}catch(e){console.warn('load standard student results:',e);}
+    try{const stableOk=await window.__bfMergeStableStudentCompletions();return ok || stableOk;}catch(e){console.warn('merge stable student results:',e);return ok;}
+  };
+})();
+</script>
 </body></html>
